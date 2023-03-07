@@ -130,14 +130,117 @@
     </div>
     <div class="e-content article-entry" itemprop="articleBody">
       
-        
+        <p>go语言内置的flag包实现了命令行参数的解析，flag包使得开发命令行工具更为简单。</p>
+<h2 id="os-Args"><a href="#os-Args" class="headerlink" title="os.Args"></a>os.Args</h2><p>如果你只是简单的想要获取命令行参数，可以像下面的代码示例一样使用 os.Args 来获取命令行参数。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> main</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> (</span><br><span class="line">	<span class="string">&quot;fmt&quot;</span></span><br><span class="line">	<span class="string">&quot;os&quot;</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	fmt.Println(os.Args)</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>os.Args 是一个存储命令行参数的字符串切片，它的第一个元素是执行文件的名称</p>
+<h2 id="flag是怎么解析参数的"><a href="#flag是怎么解析参数的" class="headerlink" title="flag是怎么解析参数的"></a>flag是怎么解析参数的</h2><p>我们知道flag包是用于命令行解析的，但其内部是怎么解析的呢？下面我们来分析一下</p>
+<p>一个命令行参数包含以下四个部分：</p>
+<ul>
+<li>接收参数的变量</li>
+<li>参数名称</li>
+<li>默认值</li>
+<li>参数说明</li>
+</ul>
+<p>所以flag设置命令行参数的函数有四个参数，比如:</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> p <span class="type">int</span></span><br><span class="line">flag.IntVar(&amp;p, <span class="string">&quot;port&quot;</span>, <span class="number">3306</span>, <span class="string">&quot;数据库端口&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>flag 内部有一个名称commandLine的变量，其类型为FlagSet,如:</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> CommandLine = NewFlagSet(os.Args[<span class="number">0</span>], ExitOnError)</span><br></pre></td></tr></table></figure>
+
+<p>FlagSet就是一个命令行参数的集合体，当我们调用诸如IntVar这类的函数时，就是将命令行的默认值、参数说明、参数名称、接收参数的变量等信息告诉flag库，而flag内部会让CommandLine来处理，用这些信息创建Flag类型的变量，将添加到这个集合体中。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flag := &amp;Flag(name, usage, value, value.String())</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>最后，当我们调用flag.Parse函数时，实际就是调用FlagSet结构体的Parse函数将命令参数解析到变量中，flag.Parse函数代码如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">func Parse() &#123;</span><br><span class="line">	CommandLine.Parse(os.Args[1:])</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>从上面的代码我们也可以看出来，FlagSet的Parse函数最终是通过获取os.Args数组的数据来解析命令行参数的。</p>
+<p>既然我们知道flag是通过类型为FlagSet的变量CommandLine来处理命令行参数的，那其实我们也可以自己创建一个FlagSet类型的变量来处理命令行参数，所以我们可以将上面的例子改成下面的样子:</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> main</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> (</span><br><span class="line">	<span class="string">&quot;flag&quot;</span></span><br><span class="line">	<span class="string">&quot;fmt&quot;</span></span><br><span class="line">	<span class="string">&quot;os&quot;</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> flagSet = flag.NewFlagSet(<span class="string">&quot;my flag&quot;</span>, flag.ExitOnError)</span><br><span class="line"></span><br><span class="line">	host := flagSet.String(<span class="string">&quot;host&quot;</span>, <span class="string">&quot;&quot;</span>, <span class="string">&quot;数据库地址&quot;</span>)</span><br><span class="line">	dbName := flagSet.String(<span class="string">&quot;db_name&quot;</span>, <span class="string">&quot;&quot;</span>, <span class="string">&quot;数据库名称&quot;</span>)</span><br><span class="line">	user := flagSet.String(<span class="string">&quot;user&quot;</span>, <span class="string">&quot;&quot;</span>, <span class="string">&quot;数据库用户&quot;</span>)</span><br><span class="line">	password := flagSet.String(<span class="string">&quot;password&quot;</span>, <span class="string">&quot;&quot;</span>, <span class="string">&quot;数据库密码&quot;</span>)</span><br><span class="line">	port := flagSet.Int(<span class="string">&quot;port&quot;</span>, <span class="number">3306</span>, <span class="string">&quot;数据库端口&quot;</span>)</span><br><span class="line"></span><br><span class="line">	flagSet.Parse(os.Args[<span class="number">1</span>:])</span><br><span class="line"></span><br><span class="line">	fmt.Printf(<span class="string">&quot;数据库地址: %s\n&quot;</span>, *host)</span><br><span class="line">	fmt.Printf(<span class="string">&quot;数据库名称: %s\n&quot;</span>, *dbName)</span><br><span class="line">	fmt.Printf(<span class="string">&quot;数据库用户: %s\n&quot;</span>, *user)</span><br><span class="line">	fmt.Printf(<span class="string">&quot;数据库密码: %s\n&quot;</span>, *password)</span><br><span class="line">	fmt.Printf(<span class="string">&quot;数据库端口: %d\n&quot;</span>, *port)</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+
+<h2 id="自定义数据类型"><a href="#自定义数据类型" class="headerlink" title="自定义数据类型"></a>自定义数据类型</h2><p>如果flag提供的类型不能满足我们的需要，我们也可以自定义类型，自定义类型需要实现flag中的Value接口，该接口定义如下:</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">type</span> value <span class="keyword">interface</span> &#123;</span><br><span class="line">	String() <span class="type">string</span></span><br><span class="line">	Set(<span class="type">string</span>) <span class="type">error</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>value类型的String方法用于打印，Set方法则用于flag包将命令行参数解析到value类型中。</p>
+<p>下面是一个自定义类型的示例程序：</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> main</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> (</span><br><span class="line">	<span class="string">&quot;flag&quot;</span></span><br><span class="line">	<span class="string">&quot;fmt&quot;</span></span><br><span class="line">	<span class="string">&quot;strings&quot;</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> users []<span class="type">string</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(u *users)</span></span> Set(val <span class="type">string</span>) <span class="type">error</span> &#123;</span><br><span class="line">	*u = strings.Split(val, <span class="string">&quot;,&quot;</span>)</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(u *users)</span></span> String() <span class="type">string</span> &#123;</span><br><span class="line">	<span class="keyword">return</span> fmt.Sprint(*u)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">var</span> u users</span><br><span class="line">	flag.Var(&amp;u, <span class="string">&quot;u&quot;</span>, <span class="string">&quot;用户列表&quot;</span>)</span><br><span class="line">	flag.Parse()</span><br><span class="line">	fmt.Println(u)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>从上面的示例中我们可以总结自定义类型的几个步骤:</p>
+<ol>
+<li>定义一个实现flag.Value接口的类型，即实现String和Set方法</li>
+<li>使用flag.Var函数将类型绑定到类型参数。</li>
+<li>调用flag.Parse()解析命令行参数。</li>
+</ol>
+<h2 id="短选项"><a href="#短选项" class="headerlink" title="短选项"></a>短选项</h2><p>我们在使用linux命令的时候，发现很多命令的参数是有分短选项和长选项的，不过flag库并不支持短选项；当然也有变通的方式，比如我们可以自己定义一个长选项和短选项，如:</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> port <span class="type">int</span></span><br><span class="line">flag.IntVar(&amp;port, <span class="string">&quot;p&quot;</span>, <span class="number">3306</span>, <span class="string">&quot;数据库端口&quot;</span>)</span><br><span class="line">flag.IntVar(&amp;port, <span class="string">&quot;port&quot;</span>, <span class="number">3306</span>, <span class="string">&quot;数据库端口&quot;</span>)</span><br><span class="line">flag.Parse()</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h2 id="flag-参数类型"><a href="#flag-参数类型" class="headerlink" title="flag 参数类型"></a>flag 参数类型</h2><p>flag包支持的命令行参数类型有bool、 int、 int64、uint、 uint64、 float、 float64、 string、 duration</p>
+<table>
+<thead>
+<tr>
+<th>flag参数</th>
+<th>有效值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>字符串flag</td>
+<td>合法字符串</td>
+</tr>
+<tr>
+<td>整数flag</td>
+<td>1234、0664、0x1234等类型，也可以是负数。</td>
+</tr>
+<tr>
+<td>浮点数flag</td>
+<td>合法浮点数</td>
+</tr>
+<tr>
+<td>bool类型flag</td>
+<td>1, 0, t, f, T, F, true, false, TRUE, FALSE, True, False。</td>
+</tr>
+<tr>
+<td>时间段flag</td>
+<td>任何合法的时间段字符串。如”300ms”、”-1.5h”、”2h45m”。合法的单位有”ns”、”us” &#x2F;“µs”、”ms”、”s”、”m”、”h”。</td>
+</tr>
+</tbody></table>
+<h1 id="定义命令行flag参数"><a href="#定义命令行flag参数" class="headerlink" title="定义命令行flag参数"></a>定义命令行flag参数</h1><p>有以下两种常用的定义命令行flag参数的方法</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flag.Type()</span><br></pre></td></tr></table></figure>
+
+<p>基本格式如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flag.Type(flag名, 默认值, 帮助信息) *Type </span><br></pre></td></tr></table></figure>
+
+<p>例如我们要定义姓名、年龄、婚否三个命令行参数，我们可以按如下方式定义：</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">name := flag.String(<span class="string">&quot;name&quot;</span>, <span class="string">&quot;张三&quot;</span>, <span class="string">&quot;姓名&quot;</span>)</span><br><span class="line">age := flag.Int(<span class="string">&quot;age&quot;</span>, <span class="number">18</span>, <span class="string">&quot;年龄&quot;</span>)</span><br><span class="line">married := flag.Bool(<span class="string">&quot;married&quot;</span>, <span class="literal">false</span>, <span class="string">&quot;婚否&quot;</span>)</span><br><span class="line">delay := flag.Duration(<span class="string">&quot;d&quot;</span>, <span class="number">0</span>, <span class="string">&quot;时间间隔&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>需要注意的是，此时name、 age、 married、 delay均为对应类型的指针。</p>
+<p>第二种形式</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flag.TypeVar()</span><br></pre></td></tr></table></figure>
+
+<p>基本格式如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flag.TypeVar(Type指针, flag名, 默认值, 帮助信息)</span><br></pre></td></tr></table></figure>
+
+<p>例如我们要定义姓名、年龄、婚否三个命令行参数，我们可以按如下方式定义：</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> name <span class="type">string</span></span><br><span class="line"><span class="keyword">var</span> age <span class="type">int</span></span><br><span class="line"><span class="keyword">var</span> married <span class="type">bool</span></span><br><span class="line"><span class="keyword">var</span> delay time.Duration</span><br><span class="line">flag.StringVar(&amp;name, <span class="string">&quot;name&quot;</span>, <span class="string">&quot;张三&quot;</span>, <span class="string">&quot;姓名&quot;</span>)</span><br><span class="line">flag.IntVar(&amp;age, <span class="string">&quot;age&quot;</span>, <span class="number">18</span>, <span class="string">&quot;年龄&quot;</span>)</span><br><span class="line">flag.BoolVar(&amp;married, <span class="string">&quot;married&quot;</span>, <span class="literal">false</span>, <span class="string">&quot;婚否&quot;</span>)</span><br><span class="line">flag.DurationVar(&amp;delay, <span class="string">&quot;d&quot;</span>, <span class="number">0</span>, <span class="string">&quot;时间间隔&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="flag-Parse"><a href="#flag-Parse" class="headerlink" title="flag.Parse()"></a>flag.Parse()</h2><p>通过以上两种方法定义好命令行flag参数后，需要通过调用flag.Parse()来对命令行参数进行解析。</p>
+<p>支持的命令行参数格式有以下几种：</p>
+<ul>
+<li>-flag xxx (使用空格， 一个 - 符号)</li>
+<li>–flag xxx (使用空格， 两个 - 符号)</li>
+<li>-flag&#x3D;xxx (使用等号， 一个 - 符号)</li>
+<li>–flag&#x3D;xxx (使用等号， 两个 - 符号)</li>
+</ul>
+<p>其中，布尔类型的参数必须使用等号的方式指定。</p>
+
         
             <div id="toc-article">
                 
   <div class="widget-wrap" id="toc-wrap">
     <h3 class="widget-title"><i class="fa fa-toc"></i> 文章目录</h3>
     <div class="widget">
-      
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#os-Args"><span class="toc-text">os.Args</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#flag%E6%98%AF%E6%80%8E%E4%B9%88%E8%A7%A3%E6%9E%90%E5%8F%82%E6%95%B0%E7%9A%84"><span class="toc-text">flag是怎么解析参数的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B"><span class="toc-text">自定义数据类型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9F%AD%E9%80%89%E9%A1%B9"><span class="toc-text">短选项</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#flag-%E5%8F%82%E6%95%B0%E7%B1%BB%E5%9E%8B"><span class="toc-text">flag 参数类型</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%AE%9A%E4%B9%89%E5%91%BD%E4%BB%A4%E8%A1%8Cflag%E5%8F%82%E6%95%B0"><span class="toc-text">定义命令行flag参数</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#flag-Parse"><span class="toc-text">flag.Parse()</span></a></li></ol>
     </div>
   </div>
 
