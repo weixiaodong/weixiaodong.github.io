@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  
+  <title>go-每日一库之-grpc使用 | 学习记录</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+  
+  
+    <link rel="alternate" href="/atom.xml" title="学习记录" type="application/atom+xml">
+  
+  
+    <link rel="shortcut icon" href="/favicon.png">
+  
+  
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/typeface-source-code-pro@0.0.71/index.min.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+    
+<link rel="stylesheet" href="/localshare/css/share.css">
+
+  
+  
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">学习记录</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        
+          <a class="main-nav-link" href="/."><i class="fa fa-home"></i> 首页</a>
+        
+          <a class="main-nav-link" href="/archives/"><i class="fa fa-archive"></i> 归档</a>
+        
+          <a class="main-nav-link" href="/about/"><i class="fa fa-user"></i> 关于</a>
+        
+      </nav>
+    </div>
+    <div id="search-form">
+      <div id="result-mask" class="hide"></div>
+      <label><input id="search-key" type="text" autocomplete="off" placeholder="搜索"></label>
+      <div id="result-wrap" class="hide">
+        <div id="search-result"></div>
+      </div>
+      <div class="hide">
+        <template id="search-tpl">
+          <div class="item">
+            <a href="/{path}" title="{title}">
+              <div class="title">{title}</div>
+              <div class="time">{date}</div>
+              <div class="tags">{tags}</div>
+            </a>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</header>
+
+      <div class="outer">
+        <section id="main"><article id="post-go-每日一库之-grpc使用" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="p-name article-title" itemprop="headline name">
+      go-每日一库之-grpc使用
+    </h1>
+  
+
+
+      </header>
+    
+    <div class="article-meta">
+      
+      <span class="article-date">
+  <i class="fa fa-date"></i>
+  <time class="dt-published" datetime="2023-03-14T02:36:00.000Z" itemprop="datePublished">2023年03月14日</time>
+</span>
+      
+      
+        <span class="article-views">
+  <i class="fa fa-views"></i>
+  <i id="busuanzi_container_page_pv">
+      <i id="busuanzi_value_page_pv"></i>
+  </i>
+</span>
+
+      
+      
+<a href="/2023/03/14/go-%E6%AF%8F%E6%97%A5%E4%B8%80%E5%BA%93%E4%B9%8B-grpc%E4%BD%BF%E7%94%A8/#comments" class="article-comment-link">
+  
+    
+      <span class="post-comments-count valine-comment-count" data-xid="/2023/03/14/go-%E6%AF%8F%E6%97%A5%E4%B8%80%E5%BA%93%E4%B9%8B-grpc%E4%BD%BF%E7%94%A8/" itemprop="commentCount"></span>
+    
+    
+    
+    
+    
+  
+  <i class="fa fa-commt"></i>
+  留言
+</a>
+
+
+    </div>
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <h2 id="grpc基础："><a href="#grpc基础：" class="headerlink" title="grpc基础："></a>grpc基础：</h2><p>本教程提供了go程序员如何使用grpc的指南。</p>
+<p>通过学习教程中的例子，你可以学会如何：</p>
+<ul>
+<li>在一个.proto文件内定义服务</li>
+<li>使用grpc的go api为你的服务实现一个简单的客户端和服务端</li>
+</ul>
+<span id="more"></span>
+
+<h2 id="为什么使用grpc"><a href="#为什么使用grpc" class="headerlink" title="为什么使用grpc"></a>为什么使用grpc</h2><p>我们的例子是一个简单的路由映射的应用，它允许客户端获取路由特性的信息，生成路由的总结，以及交互路由信息，如服务器和其他客户端的流量更新。</p>
+<p>有了grpc，我们可以一次性的在一个.proto文件中定义服务并使用任何支持她的语言去实现客户端和服务端 – grpc帮你解决了不同语言及环境间通信的复杂性，使用protocol buffer还能获得其他好处，包括高效的序列号，简单的IDL以及容易进行接口更新。</p>
+<h2 id="定义服务"><a href="#定义服务" class="headerlink" title="定义服务"></a>定义服务</h2><p>要定义一个服务，你必须在你的.proto文件中指定service:</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">service RouteGuide &#123;</span><br><span class="line">	...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后在你的服务中定义rpc方法，指定请求和响应类型。grpc允许你定义4中类型的service方法，这些都在routeguide服务中使用：</p>
+<ul>
+<li>一个简单rpc，客户端使用存根发送请求到服务器并等待响应返回，就像平常的函数调用一样。</li>
+</ul>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">rpc GetFeature(Point) returns (Feature) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>一个服务端流式rpc，客户端发送请求到服务端，拿到一个流去读取返回的消息序列。 客户端读取返回的流，直到里面没有任何消息。从例子中可以看出，通过在响应类型前插入stream 关键字，可以指定一个服务器端的流方法。</li>
+</ul>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">rpc ListFeatures(Rectanle) returns (stream Feature) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>一个客户端流式rpc，客户端写入一个消息序列并将其发送到服务器，同样也是使用流。一单客户端完成写入消息，它等待服务器完成读取返回它的响应。 通过在请求类型前指定stram关键字来指定一个客户端流方法。</li>
+</ul>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">rpc RecordRoute(stream Point) returns (RouteSummary) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>一个双向流式rpc是双发使用读写流去发送一个消息序列。 两个流独立操作，因此客户端和服务端可以以任意喜欢的顺序读写：比如， 服务器可以在写入响应前等待接收所有的客户端消息，或者可以交替的读取和写入消息，或者其他读写的组合。 每个流中的消息顺序被预留。 你可以通过在请求和响应前加stream关键字指定方法的类型</li>
+</ul>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">rpc RouteChat(stream RouteNote) returns (stream RouteNote) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们的.proto文件也包含了所有请求的protocol buffer消息类型定义以及在服务方法中使用的响应类型，比如，下面的Point消息类型:</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">message Point &#123;</span><br><span class="line">	<span class="type">int32</span> latitude = <span class="number">1</span>;</span><br><span class="line">	<span class="type">int32</span> longitude = <span class="number">2</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="生成客户端和服务器代码"><a href="#生成客户端和服务器代码" class="headerlink" title="生成客户端和服务器代码"></a>生成客户端和服务器代码</h2><p>接下来我们需要从.proto的服务定义中生成grpc客户端和服务器的接口。 我们通过protocol buffer的编译器protoc以及一个特殊的grpc go插件来完成。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">protoc --go_out=plugins=grpc:. route_guide.proto</span><br></pre></td></tr></table></figure>
+
+<p>运行这个命令可以在当前目录中生成下面的文件:</p>
+<ul>
+<li>route_guide.pb.go</li>
+</ul>
+<p>这些包括：</p>
+<ul>
+<li>所有用于填充，序列化和获取我们请求和响应消息类型的protocol buffer代码</li>
+<li>一个为客户端调用定义在RouteGuide服务的方法的接口类型（或者存根）</li>
+<li>一个为服务器使用定义在RouteGuide服务的方法去实现的接口类型（或者存根）</li>
+</ul>
+<h2 id="创建服务器"><a href="#创建服务器" class="headerlink" title="创建服务器"></a>创建服务器</h2><p>首先来看看我们如何创建一个RouteGuide服务器。 </p>
+<p>让RouteGuide服务工作有两个部分：</p>
+<ul>
+<li>实现我们服务定义的生成的服务接口： 做我们的服务的实际的工作</li>
+<li>运行一个grpc服务器， 监听来自客户单的请求并返回服务的响应。</li>
+</ul>
+<h2 id="实现RouteGuide"><a href="#实现RouteGuide" class="headerlink" title="实现RouteGuide"></a>实现RouteGuide</h2><p>我们可以看出，服务器有一个实现了生成的RouteGuideServer接口的routeGuideServer结构类型：</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> routeGuideServer <span class="keyword">struct</span> &#123;</span><br><span class="line">	...</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *routeGuideServer)</span></span> GetFeature(ctx context.Context, point *pb.Point) (*pb.Feature, <span class="type">error</span>) &#123;</span><br><span class="line">        ...</span><br><span class="line">&#125;</span><br><span class="line">...</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *routeGuideServer)</span></span> ListFeatures(rect *pb.Rectangle, stream pb.RouteGuide_ListFeaturesServer) <span class="type">error</span> &#123;</span><br><span class="line">        ...</span><br><span class="line">&#125;</span><br><span class="line">...</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *routeGuideServer)</span></span> RecordRoute(stream pb.RouteGuide_RecordRouteServer) <span class="type">error</span> &#123;</span><br><span class="line">        ...</span><br><span class="line">&#125;</span><br><span class="line">...</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *routeGuideServer)</span></span> RouteChat(stream pb.RouteGuide_RouteChatServer) <span class="type">error</span> &#123;</span><br><span class="line">        ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="简单rpc"><a href="#简单rpc" class="headerlink" title="简单rpc"></a>简单rpc</h2><p>routeGuideServer实现了我们所有的服务方法。 首先让我们看看最简单的类型GetFeature</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *routeGuideServer)</span></span> GetFeature(ctx context.Context, point *bp.Point) (*pb.Feature, <span class="type">error</span>) &#123;</span><br><span class="line">	<span class="keyword">for</span> _, feature := <span class="keyword">range</span> s.savedFeatures &#123;</span><br><span class="line">		<span class="keyword">if</span> proto.Equal(feature.Location, point) &#123;</span><br><span class="line">			<span class="keyword">return</span> feature, <span class="literal">nil</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> &amp;pb.Feature&#123;<span class="string">&quot;&quot;</span>, point&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="服务端流式rpc"><a href="#服务端流式rpc" class="headerlink" title="服务端流式rpc"></a>服务端流式rpc</h2><p>现在让我们来看看我们的一种流式rpc。 ListFeatures是一个服务器端的流式RPC，所以我们需要将多个Feature发回给客户端。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *routeGuideServer)</span></span> ListFeatures(rect *pb.Rectangle, stream pb.RouteGuide_ListFeaturesServer) <span class="type">error</span> &#123;</span><br><span class="line">	<span class="keyword">for</span> _, feature := <span class="keyword">range</span> s.savedFeatures &#123;</span><br><span class="line">		<span class="keyword">if</span> inRange(feature.Location, rect) &#123;</span><br><span class="line">			<span class="keyword">if</span> err := stream.Send(feature); err != <span class="literal">nil</span> &#123;</span><br><span class="line">				<span class="keyword">return</span> err</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如你所见，这里的请求对象是一个 Rectangle，客户端期望从中找到 Feature，这次我们得到了一个请求对象和一个特殊的RouteGuide_ListFeaturesServer来写入我们的响应，而不是得到方法参数中的简单请求和响应对象。</p>
+<p>在这个方法中，我们填充了尽可能多的 Feature 对象去返回，用它们的 Send() 方法把它们写入 RouteGuide_ListFeaturesServer。最后，在我们的简单 RPC中，我们返回了一个 nil 错误告诉 gRPC 响应的写入已经完成。如果在调用过程中发生任何错误，我们会返回一个非 nil 的错误；gRPC 层会将其转化为合适的 RPC 状态通过线路发送。</p>
+<h2 id="客户端流式-RPC"><a href="#客户端流式-RPC" class="headerlink" title="客户端流式 RPC"></a>客户端流式 RPC</h2><p>现在让我们看看稍微复杂点的东西：客户端流方法 RecordRoute，我们通过它可以从客户端拿到一个 Point 的流，其中包括它们路径的信息。如你所见，这次这个方法没有请求参数。相反的，它拿到了一个 RouteGuide_RecordRouteServer 流，服务器可以用它来同时读 和 写消息——它可以用自己的 Recv() 方法接收客户端消息并且用 SendAndClose() 方法返回它的单个响应。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *routeGuideServer)</span></span> RecordRoute(stream pb.RouteGuide_RecordRouteServer) <span class="type">error</span> &#123;</span><br><span class="line">    <span class="keyword">var</span> pointCount, featureCount, distance <span class="type">int32</span></span><br><span class="line">    <span class="keyword">var</span> lastPoint *pb.Point</span><br><span class="line">    startTime := time.Now()</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        point, err := stream.Recv()</span><br><span class="line">        <span class="keyword">if</span> err == io.EOF &#123;</span><br><span class="line">            endTime := time.Now()</span><br><span class="line">            <span class="keyword">return</span> stream.SendAndClose(&amp;pb.RouteSummary&#123;</span><br><span class="line">                PointCount:   pointCount,</span><br><span class="line">                FeatureCount: featureCount,</span><br><span class="line">                Distance:     distance,</span><br><span class="line">                ElapsedTime:  <span class="type">int32</span>(endTime.Sub(startTime).Seconds()),</span><br><span class="line">            &#125;)</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> err</span><br><span class="line">        &#125;</span><br><span class="line">        pointCount++</span><br><span class="line">        <span class="keyword">for</span> _, feature := <span class="keyword">range</span> s.savedFeatures &#123;</span><br><span class="line">            <span class="keyword">if</span> proto.Equal(feature.Location, point) &#123;</span><br><span class="line">                featureCount++</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> lastPoint != <span class="literal">nil</span> &#123;</span><br><span class="line">            distance += calcDistance(lastPoint, point)</span><br><span class="line">        &#125;</span><br><span class="line">        lastPoint = point</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在方法体中，我们使用 RouteGuide_RecordRouteServer 的 Recv() 方法去反复读取客户端的请求到一个请求对象（在这个场景下是 Point），直到没有更多的消息：服务器需要在每次调用后检查 Read() 返回的错误。如果返回值为 nil，流依然完好，可以继续读取；如果返回值为 io.EOF，消息流结束，服务器可以返回它的 RouteSummary。如果它还有其它值，我们原样返回错误，gRPC 层会把它转换为 RPC 状态。</p>
+<h2 id="双向流式-RPC"><a href="#双向流式-RPC" class="headerlink" title="双向流式 RPC"></a>双向流式 RPC</h2><p>最后，让我们看看双向流式 RPC RouteChat()。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *routeGuideServer)</span></span> RouteChat(stream pb.RouteGuide_RouteChatServer) <span class="type">error</span> &#123;</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        in, err := stream.Recv()</span><br><span class="line">        <span class="keyword">if</span> err == io.EOF &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> err</span><br><span class="line">        &#125;</span><br><span class="line">        key := serialize(in.Location)</span><br><span class="line">                ... <span class="comment">// look for notes to be sent to client</span></span><br><span class="line">        <span class="keyword">for</span> _, note := <span class="keyword">range</span> s.routeNotes[key] &#123;</span><br><span class="line">            <span class="keyword">if</span> err := stream.Send(note); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> err</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这次我们得到了一个 RouteGuide_RouteChatServer 流，和我们的客户端流的例子一样，它可以用来读写消息。但是，这次当客户端还在往 它们 的消息流中写入消息时，我们通过方法的流返回值。</p>
+<p>这里读写的语法和客户端流方法相似，除了服务器会使用流的 Send() 方法而不是 SendAndClose()，因为它需要写多个响应。虽然客户端和服务器端总是会拿到对方写入时顺序的消息，它们可以以任意顺序读写——流的操作是完全独立的</p>
+<h2 id="启动服务器"><a href="#启动服务器" class="headerlink" title="启动服务器"></a>启动服务器</h2><p>一旦我们实现了所有的方法，我们还需要启动一个gRPC服务器，这样客户端才可以使用服务。下面这段代码展示了在我们RouteGuide服务中实现的过程：</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">flag.Parse()</span><br><span class="line">lis, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, fmt.Sprintf(<span class="string">&quot;:%d&quot;</span>, *port))</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Fatalf(<span class="string">&quot;failed to listen: %v&quot;</span>, err)</span><br><span class="line">&#125;</span><br><span class="line">grpcServer := grpc.NewServer()</span><br><span class="line">pb.RegisterRouteGuideServer(grpcServer, &amp;routeGuideServer&#123;&#125;)</span><br><span class="line">... <span class="comment">// determine whether to use TLS</span></span><br><span class="line">grpcServer.Serve(lis)</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>使用 lis, err :&#x3D; net.Listen(“tcp”, fmt.Sprintf(“:%d”, *port)) 指定我们期望客户端请求的监听端口。</li>
+<li>使用grpc.NewServer()创建 gRPC 服务器的一个实例。</li>
+<li>在 gRPC 服务器注册我们的服务实现。</li>
+<li>用服务器 Serve() 方法以及我们的端口信息区实现阻塞等待，直到进程被杀死或者 Stop() 被调用。</li>
+</ol>
+<h2 id="创建客户端"><a href="#创建客户端" class="headerlink" title="创建客户端"></a>创建客户端</h2><p>在这部分，我们将尝试为 RouteGuide 服务创建一个 Go 的客户端。你可以从grpc-go&#x2F;examples&#x2F;route_guide&#x2F;client&#x2F;client.go看到我们完整的客户端例子代码.</p>
+<h3 id="创建存根"><a href="#创建存根" class="headerlink" title="创建存根"></a>创建存根</h3><p>为了调用服务方法，我们首先创建一个 gRPC conn 和服务器交互。我们通过给 grpc.Dial() 传入服务器地址和端口号做到这点，如下：</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">conn, err := grpc.Dial(*serverAddr)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">defer</span> conn.Close()</span><br></pre></td></tr></table></figure>
+
+<p>你可以使用 DialOptions 在 grpc.Dial 中设置授权认证（如， TLS，GCE认证，JWT认证），如果服务有这样的要求的话 —— 但是对于 RouteGuide 服务，我们不用这么做。</p>
+<p>一旦 gRPC conn 建立起来，我们需要一个客户端 存根 去执行 RPC。我们通过 .proto 生成的 pb 包提供的 NewRouteGuideClient 方法来完成。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">client := pb.NewRouteGuideClient(conn)</span><br></pre></td></tr></table></figure>
+
+<h3 id="调用服务方法"><a href="#调用服务方法" class="headerlink" title="调用服务方法"></a>调用服务方法</h3><p>现在让我们看看如何调用服务方法。注意，在 gRPC-Go 中，RPC以阻塞&#x2F;同步模式操作，这意味着 RPC 调用等待服务器响应，同时要么返回响应，要么返回错误。</p>
+<h4 id="简单-RPC"><a href="#简单-RPC" class="headerlink" title="简单 RPC"></a>简单 RPC</h4><p>调用简单 RPC GetFeature 几乎是和调用一个本地方法一样直观。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">feature, err := client.GetFeature(context.Background(), &amp;pb.Point&#123;<span class="number">409146138</span>, <span class="number">-746188906</span>&#125;)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如你所见，我们调用了前面创建的存根上的方法。在我们的方法参数中，我们创建并且填充了一个请求的 protocol buffer 对象（例子中为 Point）。我们同时传入了一个 context.Context ，在有需要时可以让我们改变 RPC 的行为，比如超时&#x2F;取消一个正在运行的 RPC。 如果调用没有返回错误，那么我们就可以从服务器返回的第一个返回值中读到响应信息。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">log.Println(feature)</span><br></pre></td></tr></table></figure>
+
+<h4 id="服务器端流式-RPC"><a href="#服务器端流式-RPC" class="headerlink" title="服务器端流式 RPC"></a>服务器端流式 RPC</h4><p>ListFeatures 就是我们说的服务器端流方法，它会返回地理的Feature 流。 如果你已经读过创建服务器，本节的一些内容也许看上去会很熟悉——流式 RPC 是在客户端和服务器两端以一种类似的方式实现的。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">rect := &amp;pb.Rectangle&#123; ... &#125;  <span class="comment">// initialize a pb.Rectangle</span></span><br><span class="line">stream, err := client.ListFeatures(context.Background(), rect)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">for</span> &#123;</span><br><span class="line">    feature, err := stream.Recv()</span><br><span class="line">    <span class="keyword">if</span> err == io.EOF &#123;</span><br><span class="line">        <span class="keyword">break</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Fatalf(<span class="string">&quot;%v.ListFeatures(_) = _, %v&quot;</span>, client, err)</span><br><span class="line">    &#125;</span><br><span class="line">    log.Println(feature)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在简单 RPC 的例子中，我们给方法传入一个上下文和请求。然而，我们得到返回的是一个 RouteGuide_ListFeaturesClient 实例，而不是一个应答对象。客户端可以使用 RouteGuide_ListFeaturesClient 流去读取服务器的响应。</p>
+<p>我们使用 RouteGuide_ListFeaturesClient 的 Recv() 方法去反复读取服务器的响应到一个响应 protocol buffer 对象（在这个场景下是Feature）直到消息读取完毕：每次调用完成时，客户端都要检查从 Recv() 返回的错误 err。如果返回为 nil，流依然完好并且可以继续读取；如果返回为 io.EOF，则说明消息流已经结束；否则就一定是一个通过 err 传过来的 RPC 错误。</p>
+<h4 id="客户端流式-RPC-1"><a href="#客户端流式-RPC-1" class="headerlink" title="客户端流式 RPC"></a>客户端流式 RPC</h4><p>除了我们需要给方法传入一个上下文而后返回 RouteGuide_RecordRouteClient 流以外，客户端流方法 RecordRoute 和服务器端方法类似，它可以用来读 和 写消息。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Create a random number of random points</span></span><br><span class="line">r := rand.New(rand.NewSource(time.Now().UnixNano()))</span><br><span class="line">pointCount := <span class="type">int</span>(r.Int31n(<span class="number">100</span>)) + <span class="number">2</span> <span class="comment">// Traverse at least two points</span></span><br><span class="line"><span class="keyword">var</span> points []*pb.Point</span><br><span class="line"><span class="keyword">for</span> i := <span class="number">0</span>; i &lt; pointCount; i++ &#123;</span><br><span class="line">    points = <span class="built_in">append</span>(points, randomPoint(r))</span><br><span class="line">&#125;</span><br><span class="line">log.Printf(<span class="string">&quot;Traversing %d points.&quot;</span>, <span class="built_in">len</span>(points))</span><br><span class="line">stream, err := client.RecordRoute(context.Background())</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Fatalf(<span class="string">&quot;%v.RecordRoute(_) = _, %v&quot;</span>, client, err)</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">for</span> _, point := <span class="keyword">range</span> points &#123;</span><br><span class="line">    <span class="keyword">if</span> err := stream.Send(point); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Fatalf(<span class="string">&quot;%v.Send(%v) = %v&quot;</span>, stream, point, err)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">reply, err := stream.CloseAndRecv()</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Fatalf(<span class="string">&quot;%v.CloseAndRecv() got error %v, want %v&quot;</span>, stream, err, <span class="literal">nil</span>)</span><br><span class="line">&#125;</span><br><span class="line">log.Printf(<span class="string">&quot;Route summary: %v&quot;</span>, reply)</span><br></pre></td></tr></table></figure>
+
+<p>RouteGuide_RecordRouteClient 有一个 Send() 方法，我们可以用它来给服务器发送请求。一旦我们完成使用 Send() 方法将客户端请求写入流，就需要调用流的 CloseAndRecv()方法，让 gRPC 知道我们已经完成了写入同时期待返回应答。我们从 CloseAndRecv() 返回的 err 中获得 RPC 的状态。如果状态为nil，那么CloseAndRecv()的第一个返回值将会是合法的服务器应答。</p>
+<h4 id="双向流式-RPC-1"><a href="#双向流式-RPC-1" class="headerlink" title="双向流式 RPC"></a>双向流式 RPC</h4><p>最后，让我们看看双向流式 RPC RouteChat()。 和 RecordRoute 的场景类似，我们只给函数传<br>入一个上下文对象，拿到可以用来读写的流。但是，当服务器依然在往 他们 的消息流写入消息时，我们<br>通过方法流返回值。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">stream, err := client.RouteChat(context.Background())</span><br><span class="line">waitc := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span><br><span class="line"><span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        in, err := stream.Recv()</span><br><span class="line">        <span class="keyword">if</span> err == io.EOF &#123;</span><br><span class="line">            <span class="comment">// read done.</span></span><br><span class="line">            <span class="built_in">close</span>(waitc)</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            log.Fatalf(<span class="string">&quot;Failed to receive a note : %v&quot;</span>, err)</span><br><span class="line">        &#125;</span><br><span class="line">        log.Printf(<span class="string">&quot;Got message %s at point(%d, %d)&quot;</span>, in.Message, in.Location.Latitude, in.Location.Longitude)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;()</span><br><span class="line"><span class="keyword">for</span> _, note := <span class="keyword">range</span> notes &#123;</span><br><span class="line">    <span class="keyword">if</span> err := stream.Send(note); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Fatalf(<span class="string">&quot;Failed to send a note: %v&quot;</span>, err)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">stream.CloseSend()</span><br><span class="line">&lt;-waitc</span><br></pre></td></tr></table></figure>
+
+<p>这里读写的语法和我们的客户端流方法很像，除了在完成调用时，我们会使用流的 CloseSend() 方法。<br>虽然每一端获取对方信息的顺序和信息被写入的顺序一致，客户端和服务器都可以以任意顺序读写——流的操作是完全独立的。</p>
+
+        
+            <div id="toc-article">
+                
+  <div class="widget-wrap" id="toc-wrap">
+    <h3 class="widget-title"><i class="fa fa-toc"></i> 文章目录</h3>
+    <div class="widget">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#grpc%E5%9F%BA%E7%A1%80%EF%BC%9A"><span class="toc-text">grpc基础：</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BD%BF%E7%94%A8grpc"><span class="toc-text">为什么使用grpc</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9A%E4%B9%89%E6%9C%8D%E5%8A%A1"><span class="toc-text">定义服务</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E6%88%90%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%92%8C%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BB%A3%E7%A0%81"><span class="toc-text">生成客户端和服务器代码</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E6%9C%8D%E5%8A%A1%E5%99%A8"><span class="toc-text">创建服务器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0RouteGuide"><span class="toc-text">实现RouteGuide</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AE%80%E5%8D%95rpc"><span class="toc-text">简单rpc</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%B5%81%E5%BC%8Frpc"><span class="toc-text">服务端流式rpc</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%B5%81%E5%BC%8F-RPC"><span class="toc-text">客户端流式 RPC</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8C%E5%90%91%E6%B5%81%E5%BC%8F-RPC"><span class="toc-text">双向流式 RPC</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%AF%E5%8A%A8%E6%9C%8D%E5%8A%A1%E5%99%A8"><span class="toc-text">启动服务器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E5%AE%A2%E6%88%B7%E7%AB%AF"><span class="toc-text">创建客户端</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E5%AD%98%E6%A0%B9"><span class="toc-text">创建存根</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E7%94%A8%E6%9C%8D%E5%8A%A1%E6%96%B9%E6%B3%95"><span class="toc-text">调用服务方法</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%AE%80%E5%8D%95-RPC"><span class="toc-text">简单 RPC</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%AB%AF%E6%B5%81%E5%BC%8F-RPC"><span class="toc-text">服务器端流式 RPC</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%B5%81%E5%BC%8F-RPC-1"><span class="toc-text">客户端流式 RPC</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8F%8C%E5%90%91%E6%B5%81%E5%BC%8F-RPC-1"><span class="toc-text">双向流式 RPC</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </div>
+
+
+            </div>
+        
+        
+          <blockquote id="copyright">
+              <p>原文链接: <a href="https://weixiaodong.github.io/2023/03/14/go-每日一库之-grpc使用/">https://weixiaodong.github.io/2023/03/14/go-每日一库之-grpc使用/</a></p>
+              <p>版权声明: 转载请注明出处.</p>
+          </blockquote>
+        
+      
+    </div>
+    <footer class="article-footer">
+      
+        <div class="article-tag-wrap">
+          
+    <div class="article-reward">
+        <a id="reward-btn" href="javascript:;">打赏</a>
+        <div id="reward-content">
+            <h6 class="reward-tit">“感谢你的支持，我会继续努力！”</h6>
+            <div>
+                <div class="reward-code">
+                    <img class="type-code" src="/css/images/wechat.jpg">
+                    <img class="er-code" src="/css/images/wechat-pay.png">
+                </div>
+                <div class="reward-code">
+                    <img class="type-code" src="/css/images/alipay.jpg">
+                    <img class="er-code" src="/css/images/alipay-pay.png">
+                </div>
+            </div>
+            <p class="reward-desc">扫码打赏，感谢支持</p>
+        </div>
+    </div>
+
+
+          
+          
+    <div class="social-share">
+      <span>分享到:</span>
+    </div>
+
+
+
+        </div>
+      
+      
+        
+<nav id="article-nav">
+  
+    <a href="/2023/03/10/go-cobra%E5%8C%85%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">older</strong>
+      <div class="article-nav-title">
+        
+          go-cobra包源码阅读
+        
+      </div>
+    </a>
+  
+  
+</nav>
+
+      
+      
+        
+
+
+  <section id="comments" class="vcomment"></section>
+
+
+
+
+
+
+
+      
+    </footer>
+  </div>
+</article>
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title"><i class="fa fa-posts"></i> 最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2023/03/14/go-%E6%AF%8F%E6%97%A5%E4%B8%80%E5%BA%93%E4%B9%8B-grpc%E4%BD%BF%E7%94%A8/">go-每日一库之-grpc使用</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/10/go-cobra%E5%8C%85%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/">go-cobra包源码阅读</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/10/go-%E6%AF%8F%E6%97%A5%E4%B8%80%E5%BA%93%E4%B9%8B-cobra-cli%E4%BD%BF%E7%94%A8/">go-每日一库之-cobra-cli使用</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/09/go-%E6%AF%8F%E6%97%A5%E4%B8%80%E5%BA%93%E4%B9%8B-cobra/">go-每日一库之-cobra</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/08/go-flag%E5%8C%85%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/">go flag包源码阅读</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+
+  
+    
+  
+    
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title"><i class="fa fa-archive"></i> 归档</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2023/">2023年</a><span class="archive-list-count">6</span></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+
+  
+    
+
+  
+</aside>
+        
+      </div>
+      <a id="totop" href="#top"></a>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      <p>
+        <a href="/sitemap.xml">网站地图</a>
+        <span> | </span><a href="/atom.xml">订阅本站</a>
+        <span> | </span><a href="/about/">联系博主</a>
+      </p>
+      
+        <p>
+          <i class="fa fa-visitors"></i>
+          <i id="busuanzi_container_site_uv"><i id="busuanzi_value_site_uv"></i></i>
+          ，
+          <i class="fa fa-views"></i>
+          <i id="busuanzi_container_site_pv"><i id="busuanzi_value_site_pv"></i></i>
+        </p>
+      
+      <p>
+        <span>Copyright &copy; 2023 卫小栋.</span>
+        <span>Theme by <a href="https://github.com/chaooo/hexo-theme-BlueLake/" target="_blank">BlueLake.</a></span>
+        <span>Powered by <a href="https://hexo.io/" target="_blank">Hexo.</a></span>
+      </p>
+    </div>
+  </div>
+</footer>
+
+    </div>
+  </div>
+  
+<script src="/js/jquery-3.4.1.min.js"></script>
+
+
+<script src="/js/search.json.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+
+
+  
+<script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+  
+    
+<script src="/localshare/js/social-share.js"></script>
+
+    
+<script src="/localshare/js/qrcode.js"></script>
+
+  
+  
+
+
+
+  
+
+  
+
+  
+    
+<script src="https://cdn.jsdelivr.net/npm/valine@1.3.10/dist/Valine.min.js"></script>
+
+    <script>
+      var GUEST_INFO = ['nick','mail','link'];
+      var guest_info = 'nick,mail,link'.split(',').filter(function(item){
+          return GUEST_INFO.indexOf(item) > -1
+      });
+      var notify = 'false' == true;
+      var verify = 'false' == true;
+      new Valine({
+          el: '.vcomment',
+          notify: notify,
+          verify: verify,
+          appId: "Ao8Phc6VLirvJSnGnlUY8gng-9Nh9j0Va",
+          appKey: "uoKVJAn0RJKvNZTi3f2wPRla",
+          placeholder: "Just go go",
+          pageSize:'10',
+          avatar:'mm',
+          lang:'zh-cn'
+      });
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+  
+
+
+
+
+
+</body>
+</html>
