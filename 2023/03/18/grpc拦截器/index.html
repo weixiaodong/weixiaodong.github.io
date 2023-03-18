@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  
+  <title>grpc拦截器 | 学习记录</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+  
+  
+    <link rel="alternate" href="/atom.xml" title="学习记录" type="application/atom+xml">
+  
+  
+    <link rel="shortcut icon" href="/favicon.png">
+  
+  
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/typeface-source-code-pro@0.0.71/index.min.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+    
+<link rel="stylesheet" href="/localshare/css/share.css">
+
+  
+  
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">学习记录</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        
+          <a class="main-nav-link" href="/."><i class="fa fa-home"></i> 首页</a>
+        
+          <a class="main-nav-link" href="/archives/"><i class="fa fa-archive"></i> 归档</a>
+        
+          <a class="main-nav-link" href="/about/"><i class="fa fa-user"></i> 关于</a>
+        
+      </nav>
+    </div>
+    <div id="search-form">
+      <div id="result-mask" class="hide"></div>
+      <label><input id="search-key" type="text" autocomplete="off" placeholder="搜索"></label>
+      <div id="result-wrap" class="hide">
+        <div id="search-result"></div>
+      </div>
+      <div class="hide">
+        <template id="search-tpl">
+          <div class="item">
+            <a href="/{path}" title="{title}">
+              <div class="title">{title}</div>
+              <div class="time">{date}</div>
+              <div class="tags">{tags}</div>
+            </a>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</header>
+
+      <div class="outer">
+        <section id="main"><article id="post-grpc拦截器" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="p-name article-title" itemprop="headline name">
+      grpc拦截器
+    </h1>
+  
+
+
+      </header>
+    
+    <div class="article-meta">
+      
+      <span class="article-date">
+  <i class="fa fa-date"></i>
+  <time class="dt-published" datetime="2023-03-18T12:33:52.000Z" itemprop="datePublished">2023年03月18日</time>
+</span>
+      
+      
+        <span class="article-views">
+  <i class="fa fa-views"></i>
+  <i id="busuanzi_container_page_pv">
+      <i id="busuanzi_value_page_pv"></i>
+  </i>
+</span>
+
+      
+      
+<a href="/2023/03/18/grpc%E6%8B%A6%E6%88%AA%E5%99%A8/#comments" class="article-comment-link">
+  
+    
+      <span class="post-comments-count valine-comment-count" data-xid="/2023/03/18/grpc%E6%8B%A6%E6%88%AA%E5%99%A8/" itemprop="commentCount"></span>
+    
+    
+    
+    
+    
+  
+  <i class="fa fa-commt"></i>
+  留言
+</a>
+
+
+    </div>
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <h1 id="1-概述"><a href="#1-概述" class="headerlink" title="1. 概述"></a>1. 概述</h1><p>grpc提供了interceptor功能，包括客户端拦截器和服务端拦截器。 可以在接收请求或者发起请求之前优先对请求中的数据做一些处理后再转交给指定的服务处理并响应，很适合在这里处理验证、日志等流程。</p>
+<span id="more"></span>
+
+<p>在grpc中，根据拦截的方法类型不同可以分为拦截unary方法的一元拦截器，和作用于stream方法的流拦截器。 同时还分为服务端拦截器和客户端拦截器，所以一共有以下4种类型：</p>
+<ul>
+<li>grpc.UnaryServerInterceptor</li>
+<li>grpc.StreamServerInterceptor</li>
+<li>grpc.UnaryClientInterceptor</li>
+<li>grpc.StreamClientInterceptor</li>
+</ul>
+<h1 id="2-定义"><a href="#2-定义" class="headerlink" title="2. 定义"></a>2. 定义</h1><h2 id="2-1-客户端拦截器"><a href="#2-1-客户端拦截器" class="headerlink" title="2.1 客户端拦截器"></a>2.1 客户端拦截器</h2><blockquote>
+<p>Unary Interceptor</p>
+</blockquote>
+<p>使用客户端拦截器，只需要在Dial的时候指定相应的DialOption即可。</p>
+<p>客户端一元拦截器类型为 grpc.UnaryClientInterceptor, 具体如下:</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> UnaryClientInterceptor <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, method <span class="type">string</span>, req, reply <span class="keyword">interface</span>&#123;&#125;, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption)</span></span> <span class="type">error</span></span><br></pre></td></tr></table></figure>
+
+<p>可以看到，所谓的拦截器其实就是一个函数，可以分为预处理（pre-processing）、调用rpc方法（invoking rpc method）、后处理（post-processing）三个阶段。</p>
+<p>参数含义如下：</p>
+<ul>
+<li>ctx: go语言中的上下文，一般和goroutine配合使用，起到超时控制的效果</li>
+<li>method: 当前调用的rpc方法名</li>
+<li>req: 本次请求的参数，只有在处理前阶段修改才有效</li>
+<li>reply: 本次请求响应，需要在处理后阶段才能获取到</li>
+<li>cc: grpc连接信息</li>
+<li>invoker: 可以看做是当前rpc方法，一般在拦截器中调用invoker能达到调用rpc方法的效果，当然底层也是grpc在处理。</li>
+<li>opts: 本次调用指定的options信息</li>
+</ul>
+<p>作为一个客户端拦截器，可以在处理前检查req看看本次请求带没带token之类的鉴权数据，没有的话就可以在拦截器中加上</p>
+<blockquote>
+<p>stream interceptor</p>
+</blockquote>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> StreamClientInterceptor <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, desc *StreamDesc, cc *ClientConn, method <span class="type">string</span>, streamer Streamer, opts ...CallOption)</span></span> (ClientStream, <span class="type">error</span>)</span><br></pre></td></tr></table></figure>
+
+<p>由于streamAPI和unaryAPI有所不同，因此拦截器方面也有所区别，比如req参数变成了streamer。同时其拦截过程也有所不同，不在是处理req resp，而是对streamer这个流对象进行包装，比如说实现自己的sendmsg和reqmsg方法。</p>
+<p>然后在这些方法中的预处理、调用rpc方法、后处理各个阶段加入自己的逻辑。</p>
+<h2 id="2-2-服务端拦截器"><a href="#2-2-服务端拦截器" class="headerlink" title="2.2 服务端拦截器"></a>2.2 服务端拦截器</h2><p>服务端拦截器和客户端拦截器类似，就不做过多描述。使用客户端拦截器只需要在NewServer的时候指定相应的ServerOption即可。</p>
+<blockquote>
+<p>unary Interceptor</p>
+</blockquote>
+<p>定义如下：</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> UnaryServerInterceptor <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *UnaryServerInfo, handler UnaryHander)</span></span> (resp <span class="keyword">interface</span>&#123;&#125;, err <span class="type">error</span>)</span><br></pre></td></tr></table></figure>
+
+<p>参数具体含义如下：</p>
+<ul>
+<li>ctx context.Context: 请求上下文</li>
+<li>req interface{}: rpc方法的请求参数</li>
+<li>info *unaryServerInfo: rpc方法的所有信息</li>
+<li>handler unaryHandler: rpc方法正在执行的逻辑</li>
+</ul>
+<blockquote>
+<p>stream Interceptor</p>
+</blockquote>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> StreamServerInterceptor <span class="function"><span class="keyword">func</span><span class="params">(src <span class="keyword">interface</span>&#123;&#125;, ss ServerStream, info *StreamServerInfo, handler StreamHandler)</span></span> <span class="type">error</span></span><br></pre></td></tr></table></figure>
+
+<h1 id="unaryInterceptor"><a href="#unaryInterceptor" class="headerlink" title="unaryInterceptor"></a>unaryInterceptor</h1><p>一元拦截器可以分为3个阶段:</p>
+<ul>
+<li><ol>
+<li>预处理</li>
+</ol>
+</li>
+<li><ol start="2">
+<li>调用rpc方法</li>
+</ol>
+</li>
+<li><ol start="3">
+<li>后处理</li>
+</ol>
+</li>
+</ul>
+<blockquote>
+<p>client</p>
+</blockquote>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// unaryInterceptor 一个简单的 unary interceptor 示例。</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">unaryInterceptor</span><span class="params">(ctx context.Context, method <span class="type">string</span>, req, reply <span class="keyword">interface</span>&#123;&#125;, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption)</span></span> <span class="type">error</span> &#123;</span><br><span class="line">	<span class="comment">// pre-processing</span></span><br><span class="line">	start := time.Now()</span><br><span class="line">	err := invoker(ctx, method, req, reply, cc, opts...) <span class="comment">// invoking RPC method</span></span><br><span class="line">	<span class="comment">// post-processing</span></span><br><span class="line">	end := time.Now()</span><br><span class="line">	logger(<span class="string">&quot;RPC: %s, req:%v start time: %s, end time: %s, err: %v&quot;</span>, method, req, start.Format(time.RFC3339), end.Format(time.RFC3339), err)</span><br><span class="line">	<span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>invoker(ctx, method, req, reply, cc, opts…) 是真正调用 RPC 方法。因此我们可以在调用前后增加自己的逻辑：比如调用前检查一下参数之类的，调用后记录一下本次请求处理耗时等。</p>
+<p>建立连接时通过 grpc.WithUnaryInterceptor 指定要加载的拦截器即可。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	flag.Parse()</span><br><span class="line"></span><br><span class="line">	creds, err := credentials.NewClientTLSFromFile(data.Path(<span class="string">&quot;x509/server.crt&quot;</span>), <span class="string">&quot;www.lixueduan.com&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;failed to load credentials: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// 建立连接时指定要加载的拦截器</span></span><br><span class="line">	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds), grpc.WithUnaryInterceptor(unaryInterceptor))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;did not connect: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">defer</span> conn.Close()</span><br><span class="line"></span><br><span class="line">	client := ecpb.NewEchoClient(conn)</span><br><span class="line">	callUnaryEcho(client, <span class="string">&quot;hello world&quot;</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>server</p>
+</blockquote>
+<p>服务端的一元拦截器和客户端类似：</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">unaryInterceptor</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span></span> (<span class="keyword">interface</span>&#123;&#125;, <span class="type">error</span>) &#123;</span><br><span class="line">	start := time.Now()</span><br><span class="line">	m, err := handler(ctx, req)</span><br><span class="line">	end := time.Now()</span><br><span class="line">	<span class="comment">// 记录请求参数 耗时 错误信息等数据</span></span><br><span class="line">	logger(<span class="string">&quot;RPC: %s,req:%v start time: %s, end time: %s, err: %v&quot;</span>, info.FullMethod, req, start.Format(time.RFC3339), end.Format(time.RFC3339), err)</span><br><span class="line">	<span class="keyword">return</span> m, err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>服务端则是在 NewServer 时指定拦截器：</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	flag.Parse()</span><br><span class="line"></span><br><span class="line">	lis, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, fmt.Sprintf(<span class="string">&quot;:%d&quot;</span>, *port))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;failed to listen: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	creds, err := credentials.NewServerTLSFromFile(data.Path(<span class="string">&quot;x509/server.crt&quot;</span>), data.Path(<span class="string">&quot;x509/server.key&quot;</span>))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;failed to create credentials: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	s := grpc.NewServer(grpc.Creds(creds), grpc.UnaryInterceptor(unaryInterceptor))</span><br><span class="line"></span><br><span class="line">	pb.RegisterEchoServer(s, &amp;server&#123;&#125;)</span><br><span class="line">	log.Println(<span class="string">&quot;Server gRPC on 0.0.0.0&quot;</span> + fmt.Sprintf(<span class="string">&quot;:%d&quot;</span>, *port))</span><br><span class="line">	<span class="keyword">if</span> err := s.Serve(lis); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;failed to serve: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="4-StreamInterceptor"><a href="#4-StreamInterceptor" class="headerlink" title="4. StreamInterceptor"></a>4. StreamInterceptor</h1><p>流拦截器过程和一元拦截器有所不同，不过同样可以分为3个阶段：</p>
+<p>1）预处理(pre-processing)<br>2）调用RPC方法(invoking RPC method)<br>3）后处理(post-processing)<br>预处理阶段和一元拦截器类似，但是调用RPC方法和后处理这两个阶段则完全不同。</p>
+<p>StreamAPI 的请求和响应都是通过 Stream 进行传递的，更进一步是通过 Streamer 调用 SendMsg 和 RecvMsg 这两个方法获取的。</p>
+<p>然后 Streamer 又是调用RPC方法来获取的，所以在流拦截器中我们可以对 Streamer 进行包装，然后实现 SendMsg 和 RecvMsg 这两个方法。</p>
+<blockquote>
+<p>client</p>
+</blockquote>
+<p>本例中通过结构体嵌入的方式，对 Streamer 进行包装，在 SendMsg 和 RecvMsg 之前打印出具体的值。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// wrappedStream  用于包装 grpc.ClientStream 结构体并拦截其对应的方法。</span></span><br><span class="line"><span class="keyword">type</span> wrappedStream <span class="keyword">struct</span> &#123;</span><br><span class="line">	grpc.ClientStream</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newWrappedStream</span><span class="params">(s grpc.ClientStream)</span></span> grpc.ClientStream &#123;</span><br><span class="line">	<span class="keyword">return</span> &amp;wrappedStream&#123;s&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(w *wrappedStream)</span></span> RecvMsg(m <span class="keyword">interface</span>&#123;&#125;) <span class="type">error</span> &#123;</span><br><span class="line">	logger(<span class="string">&quot;Receive a message (Type: %T) at %v&quot;</span>, m, time.Now().Format(time.RFC3339))</span><br><span class="line">	<span class="keyword">return</span> w.ClientStream.RecvMsg(m)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(w *wrappedStream)</span></span> SendMsg(m <span class="keyword">interface</span>&#123;&#125;) <span class="type">error</span> &#123;</span><br><span class="line">	logger(<span class="string">&quot;Send a message (Type: %T) at %v&quot;</span>, m, time.Now().Format(time.RFC3339))</span><br><span class="line">	<span class="keyword">return</span> w.ClientStream.SendMsg(m)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// streamInterceptor 一个简单的 stream interceptor 示例。</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">streamInterceptor</span><span class="params">(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method <span class="type">string</span>, streamer grpc.Streamer, opts ...grpc.CallOption)</span></span> (grpc.ClientStream, <span class="type">error</span>) &#123;</span><br><span class="line">	s, err := streamer(ctx, desc, cc, method, opts...)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">    <span class="comment">// 返回的是自定义的封装过的 stream</span></span><br><span class="line">	<span class="keyword">return</span> newWrappedStream(s), <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>连接时则通过 grpc.WithStreamInterceptor 指定要加载的拦截器。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	flag.Parse()</span><br><span class="line"></span><br><span class="line">	creds, err := credentials.NewClientTLSFromFile(data.Path(<span class="string">&quot;x509/server.crt&quot;</span>), <span class="string">&quot;www.lixueduan.com&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;failed to load credentials: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// 建立连接时指定要加载的拦截器</span></span><br><span class="line">	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds), grpc.WithStreamInterceptor(streamInterceptor))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;did not connect: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">defer</span> conn.Close()</span><br><span class="line"></span><br><span class="line">	client := ecpb.NewEchoClient(conn)</span><br><span class="line">	<span class="comment">// callUnaryEcho(client, &quot;hello world&quot;)</span></span><br><span class="line">	callBidiStreamingEcho(client)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>server</p>
+</blockquote>
+<p>和客户端类似。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> wrappedStream <span class="keyword">struct</span> &#123;</span><br><span class="line">	grpc.ServerStream</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newWrappedStream</span><span class="params">(s grpc.ServerStream)</span></span> grpc.ServerStream &#123;</span><br><span class="line">	<span class="keyword">return</span> &amp;wrappedStream&#123;s&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(w *wrappedStream)</span></span> RecvMsg(m <span class="keyword">interface</span>&#123;&#125;) <span class="type">error</span> &#123;</span><br><span class="line">	logger(<span class="string">&quot;Receive a message (Type: %T) at %s&quot;</span>, m, time.Now().Format(time.RFC3339))</span><br><span class="line">	<span class="keyword">return</span> w.ServerStream.RecvMsg(m)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(w *wrappedStream)</span></span> SendMsg(m <span class="keyword">interface</span>&#123;&#125;) <span class="type">error</span> &#123;</span><br><span class="line">	logger(<span class="string">&quot;Send a message (Type: %T) at %v&quot;</span>, m, time.Now().Format(time.RFC3339))</span><br><span class="line">	<span class="keyword">return</span> w.ServerStream.SendMsg(m)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">streamInterceptor</span><span class="params">(srv <span class="keyword">interface</span>&#123;&#125;, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler)</span></span> <span class="type">error</span> &#123;</span><br><span class="line">	<span class="comment">// 包装 grpc.ServerStream 以替换 RecvMsg SendMsg这两个方法。</span></span><br><span class="line">	err := handler(srv, newWrappedStream(ss))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		logger(<span class="string">&quot;RPC failed with error %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>相似的，通过grpc.StreamInterceptor指定要加载的拦截器。</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	flag.Parse()</span><br><span class="line"></span><br><span class="line">	lis, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, fmt.Sprintf(<span class="string">&quot;:%d&quot;</span>, *port))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;failed to listen: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	creds, err := credentials.NewServerTLSFromFile(data.Path(<span class="string">&quot;x509/server.crt&quot;</span>), data.Path(<span class="string">&quot;x509/server.key&quot;</span>))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;failed to create credentials: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	s := grpc.NewServer(grpc.Creds(creds), grpc.StreamInterceptor(streamInterceptor))</span><br><span class="line"></span><br><span class="line">	pb.RegisterEchoServer(s, &amp;server&#123;&#125;)</span><br><span class="line">	log.Println(<span class="string">&quot;Server gRPC on 0.0.0.0&quot;</span> + fmt.Sprintf(<span class="string">&quot;:%d&quot;</span>, *port))</span><br><span class="line">	<span class="keyword">if</span> err := s.Serve(lis); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">&quot;failed to serve: %v&quot;</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="5-小结"><a href="#5-小结" class="headerlink" title="5. 小结"></a>5. 小结</h1><p>1）拦截器分类与定义 gRPC 拦截器可以分为：一元拦截器和流拦截器，服务端拦截器和客户端拦截器。</p>
+<p>一共有以下4种类型:</p>
+<ul>
+<li>grpc.UnaryServerInterceptor</li>
+<li>grpc.StreamServerInterceptor</li>
+<li>grpc.UnaryClientInterceptor</li>
+<li>grpc.StreamClientInterceptor</li>
+</ul>
+<p>拦截器本质上就是一个特定类型的函数，所以实现拦截器只需要实现对应类型方法（方法签名相同）即可。</p>
+<p>2）拦截器执行过程</p>
+<p>一元拦截器</p>
+<ul>
+<li>1）预处理</li>
+<li>2）调用RPC方法</li>
+<li>3）后处理</li>
+</ul>
+<p>流拦截器</p>
+<ul>
+<li>1）预处理</li>
+<li>2）调用RPC方法 获取 Streamer</li>
+<li>3）后处理<br>  调用 SendMsg 、RecvMsg 之前<br>  调用 SendMsg 、RecvMsg<br>  调用 SendMsg 、RecvMsg 之后</li>
+</ul>
+<p>3）拦截器使用及执行顺序</p>
+<p>配置多个拦截器时，会按照参数传入顺序依次执行</p>
+<p>所以，如果想配置一个 Recovery 拦截器则必须放在第一个，放在最后则无法捕获前面执行的拦截器中触发的 panic。</p>
+<p>同时也可以将 一元和流拦截器一起配置，gRPC 会根据不同方法选择对应类型的拦截器执行。</p>
+
+        
+            <div id="toc-article">
+                
+  <div class="widget-wrap" id="toc-wrap">
+    <h3 class="widget-title"><i class="fa fa-toc"></i> 文章目录</h3>
+    <div class="widget">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#1-%E6%A6%82%E8%BF%B0"><span class="toc-text">1. 概述</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#2-%E5%AE%9A%E4%B9%89"><span class="toc-text">2. 定义</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2-1-%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%8B%A6%E6%88%AA%E5%99%A8"><span class="toc-text">2.1 客户端拦截器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-2-%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%8B%A6%E6%88%AA%E5%99%A8"><span class="toc-text">2.2 服务端拦截器</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#unaryInterceptor"><span class="toc-text">unaryInterceptor</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#4-StreamInterceptor"><span class="toc-text">4. StreamInterceptor</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#5-%E5%B0%8F%E7%BB%93"><span class="toc-text">5. 小结</span></a></li></ol>
+    </div>
+  </div>
+
+
+            </div>
+        
+        
+          <blockquote id="copyright">
+              <p>原文链接: <a href="https://weixiaodong.github.io/2023/03/18/grpc拦截器/">https://weixiaodong.github.io/2023/03/18/grpc拦截器/</a></p>
+              <p>版权声明: 转载请注明出处.</p>
+          </blockquote>
+        
+      
+    </div>
+    <footer class="article-footer">
+      
+        <div class="article-tag-wrap">
+          
+    <div class="article-reward">
+        <a id="reward-btn" href="javascript:;">打赏</a>
+        <div id="reward-content">
+            <h6 class="reward-tit">“感谢你的支持，我会继续努力！”</h6>
+            <div>
+                <div class="reward-code">
+                    <img class="type-code" src="/css/images/wechat.jpg">
+                    <img class="er-code" src="/css/images/wechat-pay.png">
+                </div>
+                <div class="reward-code">
+                    <img class="type-code" src="/css/images/alipay.jpg">
+                    <img class="er-code" src="/css/images/alipay-pay.png">
+                </div>
+            </div>
+            <p class="reward-desc">扫码打赏，感谢支持</p>
+        </div>
+    </div>
+
+
+          
+          
+    <div class="social-share">
+      <span>分享到:</span>
+    </div>
+
+
+
+        </div>
+      
+      
+        
+<nav id="article-nav">
+  
+    <a href="/2023/03/18/etcd%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">older</strong>
+      <div class="article-nav-title">
+        
+          etcd分布式锁
+        
+      </div>
+    </a>
+  
+  
+</nav>
+
+      
+      
+        
+
+
+  <section id="comments" class="vcomment"></section>
+
+
+
+
+
+
+
+      
+    </footer>
+  </div>
+</article>
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title"><i class="fa fa-posts"></i> 最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2023/03/18/grpc%E6%8B%A6%E6%88%AA%E5%99%A8/">grpc拦截器</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/18/etcd%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/">etcd分布式锁</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/17/grpc%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">grpc负载均衡</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/17/etcd%E5%AE%9E%E7%8E%B0%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0/">etcd实现服务注册与发现</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/16/go-%E6%AF%8F%E6%97%A5%E4%B8%80%E5%BA%93%E4%B9%8B-etcd%E4%BD%BF%E7%94%A8/">go-每日一库之-etcd使用</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+
+  
+    
+  
+    
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title"><i class="fa fa-archive"></i> 归档</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2023/">2023年</a><span class="archive-list-count">12</span></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+
+  
+    
+
+  
+</aside>
+        
+      </div>
+      <a id="totop" href="#top"></a>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      <p>
+        <a href="/sitemap.xml">网站地图</a>
+        <span> | </span><a href="/atom.xml">订阅本站</a>
+        <span> | </span><a href="/about/">联系博主</a>
+      </p>
+      
+        <p>
+          <i class="fa fa-visitors"></i>
+          <i id="busuanzi_container_site_uv"><i id="busuanzi_value_site_uv"></i></i>
+          ，
+          <i class="fa fa-views"></i>
+          <i id="busuanzi_container_site_pv"><i id="busuanzi_value_site_pv"></i></i>
+        </p>
+      
+      <p>
+        <span>Copyright &copy; 2023 卫小栋.</span>
+        <span>Theme by <a href="https://github.com/chaooo/hexo-theme-BlueLake/" target="_blank">BlueLake.</a></span>
+        <span>Powered by <a href="https://hexo.io/" target="_blank">Hexo.</a></span>
+      </p>
+    </div>
+  </div>
+</footer>
+
+    </div>
+  </div>
+  
+<script src="/js/jquery-3.4.1.min.js"></script>
+
+
+<script src="/js/search.json.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+
+
+  
+<script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+  
+    
+<script src="/localshare/js/social-share.js"></script>
+
+    
+<script src="/localshare/js/qrcode.js"></script>
+
+  
+  
+
+
+
+  
+
+  
+
+  
+    
+<script src="https://cdn.jsdelivr.net/npm/valine@1.3.10/dist/Valine.min.js"></script>
+
+    <script>
+      var GUEST_INFO = ['nick','mail','link'];
+      var guest_info = 'nick,mail,link'.split(',').filter(function(item){
+          return GUEST_INFO.indexOf(item) > -1
+      });
+      var notify = 'false' == true;
+      var verify = 'false' == true;
+      new Valine({
+          el: '.vcomment',
+          notify: notify,
+          verify: verify,
+          appId: "Ao8Phc6VLirvJSnGnlUY8gng-9Nh9j0Va",
+          appKey: "uoKVJAn0RJKvNZTi3f2wPRla",
+          placeholder: "Just go go",
+          pageSize:'10',
+          avatar:'mm',
+          lang:'zh-cn'
+      });
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+  
+
+
+
+
+
+</body>
+</html>
