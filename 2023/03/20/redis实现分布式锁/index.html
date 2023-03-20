@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  
+  <title>redis实现分布式锁 | 学习记录</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+  
+  
+    <link rel="alternate" href="/atom.xml" title="学习记录" type="application/atom+xml">
+  
+  
+    <link rel="shortcut icon" href="/favicon.png">
+  
+  
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/typeface-source-code-pro@0.0.71/index.min.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+    
+<link rel="stylesheet" href="/localshare/css/share.css">
+
+  
+  
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">学习记录</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        
+          <a class="main-nav-link" href="/."><i class="fa fa-home"></i> 首页</a>
+        
+          <a class="main-nav-link" href="/archives/"><i class="fa fa-archive"></i> 归档</a>
+        
+          <a class="main-nav-link" href="/about/"><i class="fa fa-user"></i> 关于</a>
+        
+      </nav>
+    </div>
+    <div id="search-form">
+      <div id="result-mask" class="hide"></div>
+      <label><input id="search-key" type="text" autocomplete="off" placeholder="搜索"></label>
+      <div id="result-wrap" class="hide">
+        <div id="search-result"></div>
+      </div>
+      <div class="hide">
+        <template id="search-tpl">
+          <div class="item">
+            <a href="/{path}" title="{title}">
+              <div class="title">{title}</div>
+              <div class="time">{date}</div>
+              <div class="tags">{tags}</div>
+            </a>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</header>
+
+      <div class="outer">
+        <section id="main"><article id="post-redis实现分布式锁" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="p-name article-title" itemprop="headline name">
+      redis实现分布式锁
+    </h1>
+  
+
+
+      </header>
+    
+    <div class="article-meta">
+      
+      <span class="article-date">
+  <i class="fa fa-date"></i>
+  <time class="dt-published" datetime="2023-03-20T08:02:49.000Z" itemprop="datePublished">2023年03月20日</time>
+</span>
+      
+      
+        <span class="article-views">
+  <i class="fa fa-views"></i>
+  <i id="busuanzi_container_page_pv">
+      <i id="busuanzi_value_page_pv"></i>
+  </i>
+</span>
+
+      
+      
+<a href="/2023/03/20/redis%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/#comments" class="article-comment-link">
+  
+    
+      <span class="post-comments-count valine-comment-count" data-xid="/2023/03/20/redis%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/" itemprop="commentCount"></span>
+    
+    
+    
+    
+    
+  
+  <i class="fa fa-commt"></i>
+  留言
+</a>
+
+
+    </div>
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <h1 id="互斥锁"><a href="#互斥锁" class="headerlink" title="互斥锁"></a>互斥锁</h1><p>redis里有一个set nx的命令，我们可以通过这个命令来实现互斥锁功能， </p>
+<span id="more"></span>
+
+<p>在redis官方文档里面推荐的标准实现方式是：<br>set resource_name my_random_value nx px 30000 这串命令，其中:</p>
+<ul>
+<li>resource_name: 表示要锁定的资源</li>
+<li>NX 表示如果不存在则设置</li>
+<li>PX 30000 表示过期时间为30000毫秒，也就是30秒</li>
+<li>my_random_value 这个值在所有的客户端必须是唯一的，所有同一key的锁竞争者这个值都不能一样。</li>
+</ul>
+<p>值必须是随机数主要是为了更安全的释放锁，释放锁的时候使用脚本告诉redis: 只有key存在并且存储的值和我指定的值一样才能告诉我删除成功，避免错误释放别的竞争者的锁。</p>
+<p>由于涉及到两个操作，因此我们需要通过lua脚本保证操作的原子性:</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> redis.call(<span class="string">&quot;get&quot;</span>, KEYS[<span class="number">1</span>]) == ARGV[<span class="number">1</span>] <span class="keyword">then</span></span><br><span class="line">	<span class="keyword">return</span> redis.call(<span class="string">&quot;del&quot;</span>, KEY[<span class="number">1</span>])</span><br><span class="line"><span class="keyword">else</span></span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<p>举个不用lua脚本的例子： 客户端A取的资源锁，但是紧接着被一个操作阻塞了，当客户端A运行完毕其他操作后要释放锁时，原来的锁早已超时并且被redis自动释放，并且在这期间资源锁又被客户端B再次获取到。</p>
+<p>因为判断和删除是两个操作，所以有可能A刚判断完锁就过期自动释放了，然后B就获取到了锁，然后A又调用Del，导致把B的锁给释放了。</p>
+<h2 id="tryLock和unlock实现"><a href="#tryLock和unlock实现" class="headerlink" title="tryLock和unlock实现"></a>tryLock和unlock实现</h2><p>tryLock其实就是使用set resource_name my_random_value nx px 30000 加锁，这里使用UUID作为随机值，并且在加锁成功时把随机值返回，这个随机值会在unlock时使用；<br>unlock解锁逻辑就是执行前面说到的lua脚本。</p>
+<h2 id="lock-实现"><a href="#lock-实现" class="headerlink" title="lock 实现"></a>lock 实现</h2><p>Lock是阻塞的获取锁，因此在加锁失败的时候，需要重试。当然也可能出现其他异常情况（比如网络问题，请求超时等），这些情况则直接返回error。</p>
+<p>步骤如下:</p>
+<ul>
+<li>尝试加锁，加锁成功直接返回</li>
+<li>加锁失败则不断循环尝试加锁直到成功或出现异常情况</li>
+</ul>
+<h2 id="实现看门狗机制"><a href="#实现看门狗机制" class="headerlink" title="实现看门狗机制"></a>实现看门狗机制</h2><p>我们前面的例子中提到的互斥锁有一个小问题，就是如果持有锁客户端A被阻塞，那么A的锁可能会超时被自动释放，导致客户端B提前获取到锁。<br>为了减少这种情况的发生，我们可以在A持有锁期间，不断地延长锁的过期时间，减少客户端B提前获取到锁的情况，这就是看门狗机制。<br>当然，这没办法完全避免上述情况的发生，因为如果客户端A获取锁之后，刚好与Redis的连接关闭了，这时候也就没办法延长超时时间了。</p>
+<p>加锁成功时启动一个线程，不断地延长锁的过期时间；在Unlock时关闭看门狗线程。</p>
+<p>看门狗流程如下：</p>
+<ul>
+<li>加锁成功，启动看门狗</li>
+<li>看门狗线程不断延长锁的过程时间</li>
+<li>解锁，关闭看门狗</li>
+</ul>
+<h2 id="代码示例"><a href="#代码示例" class="headerlink" title="代码示例"></a>代码示例</h2><figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">package</span> redis</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> (</span><br><span class="line">	<span class="string">&quot;context&quot;</span></span><br><span class="line">	<span class="string">&quot;errors&quot;</span></span><br><span class="line">	<span class="string">&quot;fmt&quot;</span></span><br><span class="line">	<span class="string">&quot;time&quot;</span></span><br><span class="line"></span><br><span class="line">	<span class="string">&quot;github.com/go-redis/redis/v8&quot;</span></span><br><span class="line">	<span class="string">&quot;github.com/rs/xid&quot;</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> (</span><br><span class="line">	ErrLockFailed = errors.New(<span class="string">&quot;get lock failed with max retry times&quot;</span>)</span><br><span class="line">	ErrTimeout    = errors.New(<span class="string">&quot;get lock failed with timeout&quot;</span>)</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> redisLock <span class="keyword">struct</span> &#123;</span><br><span class="line">	resource        <span class="type">string</span></span><br><span class="line">	randomValue     <span class="type">string</span></span><br><span class="line">	ttl             time.Duration</span><br><span class="line">	tryLockInterval time.Duration</span><br><span class="line">	watchDog        <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> OptionFunc <span class="function"><span class="keyword">func</span><span class="params">(*redisLock)</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">WithWatchDog</span><span class="params">()</span></span> OptionFunc &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">(l *redisLock)</span></span> &#123;</span><br><span class="line">		l.watchDog = <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">WithTryLockInterval</span><span class="params">(t time.Duration)</span></span> OptionFunc &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">(l *redisLock)</span></span> &#123;</span><br><span class="line">		l.tryLockInterval = t</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewLock</span><span class="params">(key <span class="type">string</span>, duration time.Duration, opts ...OptionFunc)</span></span> *redisLock &#123;</span><br><span class="line">	l := &amp;redisLock&#123;</span><br><span class="line">		resource: key,</span><br><span class="line">		ttl:      duration,</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">for</span> _, opt := <span class="keyword">range</span> opts &#123;</span><br><span class="line">		opt(l)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> l</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *redisLock)</span></span> TryLock(ctx context.Context) <span class="type">error</span> &#123;</span><br><span class="line">	randomValue := xid.New().String()</span><br><span class="line">	success, err := GetClient().SetNX(ctx, l.resource, randomValue, l.ttl)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 加锁失败</span></span><br><span class="line">	<span class="keyword">if</span> !success &#123;</span><br><span class="line">		<span class="keyword">return</span> ErrLockFailed</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 加锁成功</span></span><br><span class="line">	l.randomValue = randomValue</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> l.watchDog != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">go</span> l.startWatchDog()</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> unlockScript = redis.NewScript(<span class="string">`</span></span><br><span class="line"><span class="string">if redis.call(&quot;get&quot;,KEYS[1]) == ARGV[1] then</span></span><br><span class="line"><span class="string">    return redis.call(&quot;del&quot;,KEYS[1])</span></span><br><span class="line"><span class="string">else</span></span><br><span class="line"><span class="string">    return 0</span></span><br><span class="line"><span class="string">end</span></span><br><span class="line"><span class="string">`</span>)</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *redisLock)</span></span> Unlock(ctx context.Context) <span class="type">error</span> &#123;</span><br><span class="line">	fmt.Println(<span class="string">&quot;Unlock&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> l.watchDog != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="built_in">close</span>(l.watchDog)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> unlockScript.Run(context.Background(), GetClient().GetGoRedis(), []<span class="type">string</span>&#123;l.resource&#125;, l.randomValue).Err()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *redisLock)</span></span> Lock(ctx context.Context) <span class="type">error</span> &#123;</span><br><span class="line">	<span class="comment">// 尝试加锁</span></span><br><span class="line">	err := l.TryLock(ctx)</span><br><span class="line">	<span class="keyword">if</span> err == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> !errors.Is(err, ErrLockFailed) &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// 加锁失败，不断尝试</span></span><br><span class="line">	<span class="keyword">if</span> l.tryLockInterval == <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	ticker := time.NewTicker(l.tryLockInterval)</span><br><span class="line">	<span class="keyword">defer</span> ticker.Stop()</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> &lt;-ctx.Done():</span><br><span class="line">			<span class="comment">// 超时</span></span><br><span class="line">			<span class="keyword">return</span> ErrTimeout</span><br><span class="line">		<span class="keyword">case</span> &lt;-ticker.C:</span><br><span class="line">			<span class="comment">// 重新尝试加锁</span></span><br><span class="line">			err := l.TryLock(ctx)</span><br><span class="line">			<span class="keyword">if</span> err == <span class="literal">nil</span> &#123;</span><br><span class="line">				<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">if</span> !errors.Is(err, ErrLockFailed) &#123;</span><br><span class="line">				<span class="keyword">return</span> err</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *redisLock)</span></span> startWatchDog() &#123;</span><br><span class="line">	ticker := time.NewTicker(l.ttl / <span class="number">3</span>)</span><br><span class="line">	<span class="keyword">defer</span> ticker.Stop()</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> &lt;-ticker.C:</span><br><span class="line">			<span class="comment">// 延长锁的过期时间</span></span><br><span class="line">			ctx, cancel := context.WithTimeout(context.Background(), l.ttl/<span class="number">3</span>*<span class="number">2</span>)</span><br><span class="line">			fmt.Println(<span class="string">&quot;expire&quot;</span>)</span><br><span class="line">			ok, err := GetClient().Expire(ctx, l.resource, l.ttl)</span><br><span class="line">			cancel()</span><br><span class="line">			<span class="comment">// 异常或锁已经不存在则不再续期</span></span><br><span class="line">			<span class="keyword">if</span> err != <span class="literal">nil</span> || !ok &#123;</span><br><span class="line">				<span class="keyword">return</span></span><br><span class="line">			&#125;</span><br><span class="line">		<span class="keyword">case</span> &lt;-l.watchDog:</span><br><span class="line">			fmt.Println(<span class="string">&quot;done&quot;</span>)</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 已经解锁</span></span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+        
+            <div id="toc-article">
+                
+  <div class="widget-wrap" id="toc-wrap">
+    <h3 class="widget-title"><i class="fa fa-toc"></i> 文章目录</h3>
+    <div class="widget">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E4%BA%92%E6%96%A5%E9%94%81"><span class="toc-text">互斥锁</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#tryLock%E5%92%8Cunlock%E5%AE%9E%E7%8E%B0"><span class="toc-text">tryLock和unlock实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#lock-%E5%AE%9E%E7%8E%B0"><span class="toc-text">lock 实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E7%9C%8B%E9%97%A8%E7%8B%97%E6%9C%BA%E5%88%B6"><span class="toc-text">实现看门狗机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E7%A4%BA%E4%BE%8B"><span class="toc-text">代码示例</span></a></li></ol></li></ol>
+    </div>
+  </div>
+
+
+            </div>
+        
+        
+          <blockquote id="copyright">
+              <p>原文链接: <a href="https://weixiaodong.github.io/2023/03/20/redis实现分布式锁/">https://weixiaodong.github.io/2023/03/20/redis实现分布式锁/</a></p>
+              <p>版权声明: 转载请注明出处.</p>
+          </blockquote>
+        
+      
+    </div>
+    <footer class="article-footer">
+      
+        <div class="article-tag-wrap">
+          
+    <div class="article-reward">
+        <a id="reward-btn" href="javascript:;">打赏</a>
+        <div id="reward-content">
+            <h6 class="reward-tit">“感谢你的支持，我会继续努力！”</h6>
+            <div>
+                <div class="reward-code">
+                    <img class="type-code" src="/css/images/wechat.jpg">
+                    <img class="er-code" src="/css/images/wechat-pay.png">
+                </div>
+                <div class="reward-code">
+                    <img class="type-code" src="/css/images/alipay.jpg">
+                    <img class="er-code" src="/css/images/alipay-pay.png">
+                </div>
+            </div>
+            <p class="reward-desc">扫码打赏，感谢支持</p>
+        </div>
+    </div>
+
+
+          
+          
+    <div class="social-share">
+      <span>分享到:</span>
+    </div>
+
+
+
+        </div>
+      
+      
+        
+<nav id="article-nav">
+  
+    <a href="/2023/03/19/redis%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">older</strong>
+      <div class="article-nav-title">
+        
+          redis实现分布式限流
+        
+      </div>
+    </a>
+  
+  
+</nav>
+
+      
+      
+        
+
+
+  <section id="comments" class="vcomment"></section>
+
+
+
+
+
+
+
+      
+    </footer>
+  </div>
+</article>
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title"><i class="fa fa-posts"></i> 最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2023/03/20/redis%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/">redis实现分布式锁</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/19/redis%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81/">redis实现分布式限流</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/18/grpc%E6%8B%A6%E6%88%AA%E5%99%A8/">grpc拦截器</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/18/etcd%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/">etcd分布式锁</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/17/grpc%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">grpc负载均衡</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+
+  
+    
+  
+    
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title"><i class="fa fa-archive"></i> 归档</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2023/">2023年</a><span class="archive-list-count">14</span></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+
+  
+    
+
+  
+</aside>
+        
+      </div>
+      <a id="totop" href="#top"></a>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      <p>
+        <a href="/sitemap.xml">网站地图</a>
+        <span> | </span><a href="/atom.xml">订阅本站</a>
+        <span> | </span><a href="/about/">联系博主</a>
+      </p>
+      
+        <p>
+          <i class="fa fa-visitors"></i>
+          <i id="busuanzi_container_site_uv"><i id="busuanzi_value_site_uv"></i></i>
+          ，
+          <i class="fa fa-views"></i>
+          <i id="busuanzi_container_site_pv"><i id="busuanzi_value_site_pv"></i></i>
+        </p>
+      
+      <p>
+        <span>Copyright &copy; 2023 卫小栋.</span>
+        <span>Theme by <a href="https://github.com/chaooo/hexo-theme-BlueLake/" target="_blank">BlueLake.</a></span>
+        <span>Powered by <a href="https://hexo.io/" target="_blank">Hexo.</a></span>
+      </p>
+    </div>
+  </div>
+</footer>
+
+    </div>
+  </div>
+  
+<script src="/js/jquery-3.4.1.min.js"></script>
+
+
+<script src="/js/search.json.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+
+
+  
+<script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+  
+    
+<script src="/localshare/js/social-share.js"></script>
+
+    
+<script src="/localshare/js/qrcode.js"></script>
+
+  
+  
+
+
+
+  
+
+  
+
+  
+    
+<script src="https://cdn.jsdelivr.net/npm/valine@1.3.10/dist/Valine.min.js"></script>
+
+    <script>
+      var GUEST_INFO = ['nick','mail','link'];
+      var guest_info = 'nick,mail,link'.split(',').filter(function(item){
+          return GUEST_INFO.indexOf(item) > -1
+      });
+      var notify = 'false' == true;
+      var verify = 'false' == true;
+      new Valine({
+          el: '.vcomment',
+          notify: notify,
+          verify: verify,
+          appId: "Ao8Phc6VLirvJSnGnlUY8gng-9Nh9j0Va",
+          appKey: "uoKVJAn0RJKvNZTi3f2wPRla",
+          placeholder: "Just go go",
+          pageSize:'10',
+          avatar:'mm',
+          lang:'zh-cn'
+      });
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+  
+
+
+
+
+
+</body>
+</html>
