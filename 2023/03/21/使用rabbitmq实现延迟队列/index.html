@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  
+  <title>使用rabbitmq实现延迟队列 | 学习记录</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+  
+  
+    <link rel="alternate" href="/atom.xml" title="学习记录" type="application/atom+xml">
+  
+  
+    <link rel="shortcut icon" href="/favicon.png">
+  
+  
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/typeface-source-code-pro@0.0.71/index.min.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+  
+    
+<link rel="stylesheet" href="/localshare/css/share.css">
+
+  
+  
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">学习记录</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        
+          <a class="main-nav-link" href="/."><i class="fa fa-home"></i> 首页</a>
+        
+          <a class="main-nav-link" href="/archives/"><i class="fa fa-archive"></i> 归档</a>
+        
+          <a class="main-nav-link" href="/about/"><i class="fa fa-user"></i> 关于</a>
+        
+      </nav>
+    </div>
+    <div id="search-form">
+      <div id="result-mask" class="hide"></div>
+      <label><input id="search-key" type="text" autocomplete="off" placeholder="搜索"></label>
+      <div id="result-wrap" class="hide">
+        <div id="search-result"></div>
+      </div>
+      <div class="hide">
+        <template id="search-tpl">
+          <div class="item">
+            <a href="/{path}" title="{title}">
+              <div class="title">{title}</div>
+              <div class="time">{date}</div>
+              <div class="tags">{tags}</div>
+            </a>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</header>
+
+      <div class="outer">
+        <section id="main"><article id="post-使用rabbitmq实现延迟队列" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="p-name article-title" itemprop="headline name">
+      使用rabbitmq实现延迟队列
+    </h1>
+  
+
+
+      </header>
+    
+    <div class="article-meta">
+      
+      <span class="article-date">
+  <i class="fa fa-date"></i>
+  <time class="dt-published" datetime="2023-03-21T12:09:23.000Z" itemprop="datePublished">2023年03月21日</time>
+</span>
+      
+      
+        <span class="article-views">
+  <i class="fa fa-views"></i>
+  <i id="busuanzi_container_page_pv">
+      <i id="busuanzi_value_page_pv"></i>
+  </i>
+</span>
+
+      
+      
+<a href="/2023/03/21/%E4%BD%BF%E7%94%A8rabbitmq%E5%AE%9E%E7%8E%B0%E5%BB%B6%E8%BF%9F%E9%98%9F%E5%88%97/#comments" class="article-comment-link">
+  
+    
+      <span class="post-comments-count valine-comment-count" data-xid="/2023/03/21/%E4%BD%BF%E7%94%A8rabbitmq%E5%AE%9E%E7%8E%B0%E5%BB%B6%E8%BF%9F%E9%98%9F%E5%88%97/" itemprop="commentCount"></span>
+    
+    
+    
+    
+    
+  
+  <i class="fa fa-commt"></i>
+  留言
+</a>
+
+
+    </div>
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <h1 id="rabbitmq使用"><a href="#rabbitmq使用" class="headerlink" title="rabbitmq使用"></a>rabbitmq使用</h1><p>首先要引入一个概念： 死信队列，当我们发送的消息被接收端ack或reject，消息在队列的存活时间超过设定的ttl，消息数量超过队列最大长度，这样的消息会被认为是死信(“dead letter”)通过配置的死信交换机这样的死信可以被投递到对应的死信队列中。</p>
+<span id="more"></span>
+
+<p><img src="/images/rabbitmq%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97.png"></p>
+<ol>
+<li>我们将需要延迟的消息设定需要延迟的时间，也就是这个消息的最大存活时间（ttl），然后发送到普通队列中</li>
+<li>然后因为普通队列中没有消费者，所以只有静静的等待消息超时</li>
+<li>消息超时后，经过死信交换机，发送到对应的死信队列中</li>
+<li>我们只需要消费死信队列中的消息即可认为当前消息对应的队列已经到了应该执行的时间了</li>
+</ol>
+<h1 id="golang-生产端实现"><a href="#golang-生产端实现" class="headerlink" title="golang 生产端实现"></a>golang 生产端实现</h1><p>发送者的实现就很简单了，就和普通的发送实现几乎一致，因为反正就是投递到对应的队列中就可以了，只需要将发送消息的部分，在消息的header中加入x-delay字段表示当前消息的ttl就可以了，也就是设定延迟时间，注意单位为毫秒</p>
+<figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> producer</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> (</span><br><span class="line">	<span class="string">&quot;encoding/json&quot;</span></span><br><span class="line">	<span class="string">&quot;log&quot;</span></span><br><span class="line">	<span class="string">&quot;time&quot;</span></span><br><span class="line"></span><br><span class="line">	<span class="string">&quot;github.com/streadway/amqp&quot;</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Producer <span class="keyword">struct</span> &#123;</span><br><span class="line">	Addr       <span class="type">string</span></span><br><span class="line">	Exchange   <span class="type">string</span></span><br><span class="line">	RoutingKey <span class="type">string</span></span><br><span class="line">	Queue      <span class="type">string</span></span><br><span class="line"></span><br><span class="line">	conn       *amqp.Connection</span><br><span class="line">	Channel    *amqp.Channel</span><br><span class="line">	done       <span class="keyword">chan</span> <span class="type">bool</span></span><br><span class="line">	connErr    <span class="keyword">chan</span> <span class="type">error</span></span><br><span class="line">	channelErr <span class="keyword">chan</span> *amqp.Error</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewProducer</span><span class="params">(addr <span class="type">string</span>, exchange <span class="type">string</span>, queue <span class="type">string</span>, key <span class="type">string</span>)</span></span> *Producer &#123;</span><br><span class="line">	<span class="keyword">return</span> &amp;Producer&#123;</span><br><span class="line">		Addr:       addr,</span><br><span class="line">		Exchange:   exchange,</span><br><span class="line">		RoutingKey: key,</span><br><span class="line">		Queue:      queue,</span><br><span class="line">		done:       <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="type">bool</span>),</span><br><span class="line">		connErr:    <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="type">error</span>),</span><br><span class="line">		channelErr: <span class="built_in">make</span>(<span class="keyword">chan</span> *amqp.Error),</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// connect 连接到mq服务器</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Producer)</span></span> Connect() <span class="type">error</span> &#123;</span><br><span class="line">	<span class="keyword">var</span> err <span class="type">error</span></span><br><span class="line">	<span class="keyword">if</span> c.conn, err = amqp.Dial(c.Addr); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> c.Channel, err = c.conn.Channel(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		_ = c.Close()</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// 声明一个主要使用的 exchange</span></span><br><span class="line">	err = c.Channel.ExchangeDeclare(</span><br><span class="line">		c.Exchange, <span class="string">&quot;x-delayed-message&quot;</span>, <span class="literal">true</span>, <span class="literal">false</span>, <span class="literal">false</span>, <span class="literal">false</span>, amqp.Table&#123;</span><br><span class="line">			<span class="string">&quot;x-delayed-type&quot;</span>: <span class="string">&quot;fanout&quot;</span>,</span><br><span class="line">		&#125;)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 声明一个延时队列, 延时消息就是要发送到这里</span></span><br><span class="line">	q, err := c.Channel.QueueDeclare(c.Queue, <span class="literal">false</span>, <span class="literal">false</span>, <span class="literal">false</span>, <span class="literal">false</span>, <span class="literal">nil</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	err = c.Channel.QueueBind(q.Name, <span class="string">&quot;&quot;</span>, c.Exchange, <span class="literal">false</span>, <span class="literal">nil</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Producer)</span></span> Close() <span class="type">error</span> &#123;</span><br><span class="line">	<span class="built_in">close</span>(c.done)</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> !c.conn.IsClosed() &#123;</span><br><span class="line">		<span class="keyword">if</span> err := c.conn.Close(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">			log.Print(<span class="string">&quot;rabbitmq producer - connection close failed: &quot;</span>, err)</span><br><span class="line">			<span class="keyword">return</span> err</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// publish 发送消息至mq</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Producer)</span></span> Publish(body []<span class="type">byte</span>, delay <span class="type">int64</span>) <span class="type">error</span> &#123;</span><br><span class="line">	publising := amqp.Publishing&#123;</span><br><span class="line">		ContentType: <span class="string">&quot;text/plain&quot;</span>,</span><br><span class="line">		Body:        body,</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> delay &gt;= <span class="number">0</span> &#123;</span><br><span class="line">		publising.Headers = amqp.Table&#123;</span><br><span class="line">			<span class="string">&quot;x-delay&quot;</span>: delay,</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	err := c.Channel.Publish(c.Exchange, c.RoutingKey, <span class="literal">false</span>, <span class="literal">false</span>, publising)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">switch</span> v := err.(<span class="keyword">type</span>) &#123;</span><br><span class="line">		<span class="keyword">case</span> *amqp.Error:</span><br><span class="line">			c.channelErr &lt;- v</span><br><span class="line">		<span class="keyword">default</span>:</span><br><span class="line">			c.connErr &lt;- v</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// PublishJSON 将对象JSON格式化后发送消息</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Producer)</span></span> PublishJSON(body <span class="keyword">interface</span>&#123;&#125;, delay <span class="type">int64</span>) <span class="type">error</span> &#123;</span><br><span class="line">	data, err := json.Marshal(body)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> c.Publish(data, delay)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// watchconn 监控mq的连接状态</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Producer)</span></span> WatchConnect() &#123;</span><br><span class="line">	ticker := time.NewTicker(<span class="number">30</span> * time.Second)</span><br><span class="line">	<span class="keyword">defer</span> ticker.Stop()</span><br><span class="line"></span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> err := &lt;-c.connErr:</span><br><span class="line">			log.Printf(<span class="string">&quot;rabbitmq producer - connection notify close: %s&quot;</span>, err.Error())</span><br><span class="line">			c.ReConnect()</span><br><span class="line">		<span class="keyword">case</span> err := &lt;-c.channelErr:</span><br><span class="line">			log.Printf(<span class="string">&quot;rabbitmq producer - channel notify close: %s&quot;</span>, err.Error())</span><br><span class="line">			c.ReConnect()</span><br><span class="line">		<span class="keyword">case</span> &lt;-ticker.C:</span><br><span class="line">			c.ReConnect()</span><br><span class="line"></span><br><span class="line">		<span class="keyword">case</span> &lt;-c.done:</span><br><span class="line">			log.Print(<span class="string">&quot;auto detect connection is done&quot;</span>)</span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line"></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// ReConnect 根据当前链接状态判断是否需要重新连接，如果连接异常则尝试重新连接</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Producer)</span></span> ReConnect() &#123;</span><br><span class="line">	<span class="keyword">if</span> c.conn == <span class="literal">nil</span> || (c.conn != <span class="literal">nil</span> &amp;&amp; c.conn.IsClosed()) &#123;</span><br><span class="line">		log.Printf(<span class="string">&quot;rabbitmq connection is closed try to reconnect&quot;</span>)</span><br><span class="line">		<span class="keyword">if</span> err := c.Connect(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">			log.Printf(<span class="string">&quot;rabbitmq reconnect failed: %s&quot;</span>, err.Error())</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			log.Printf(<span class="string">&quot;rabbitmq reconnect succeeded&quot;</span>)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="golang-消费端实现"><a href="#golang-消费端实现" class="headerlink" title="golang 消费端实现"></a>golang 消费端实现</h1><figure class="highlight golang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> consumer</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> (</span><br><span class="line">	<span class="string">&quot;log&quot;</span></span><br><span class="line">	<span class="string">&quot;os&quot;</span></span><br><span class="line">	<span class="string">&quot;time&quot;</span></span><br><span class="line"></span><br><span class="line">	<span class="string">&quot;github.com/streadway/amqp&quot;</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Consumer <span class="keyword">struct</span> &#123;</span><br><span class="line">	conn          *amqp.Connection</span><br><span class="line">	channel       *amqp.Channel</span><br><span class="line">	connNotify    <span class="keyword">chan</span> *amqp.Error</span><br><span class="line">	channelNotify <span class="keyword">chan</span> *amqp.Error</span><br><span class="line">	done          <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line">	addr          <span class="type">string</span></span><br><span class="line">	exchange      <span class="type">string</span></span><br><span class="line">	queue         <span class="type">string</span></span><br><span class="line">	routingKey    <span class="type">string</span></span><br><span class="line">	consumerTag   <span class="type">string</span></span><br><span class="line">	autoDelete    <span class="type">bool</span></span><br><span class="line">	handler       <span class="function"><span class="keyword">func</span><span class="params">([]<span class="type">byte</span>)</span></span> <span class="type">error</span></span><br><span class="line">	delivery      &lt;-<span class="keyword">chan</span> amqp.Delivery</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// NewConsumer 创建消费者</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewConsumer</span><span class="params">(addr, exchange, queue, routingKey <span class="type">string</span>, handler <span class="keyword">func</span>([]<span class="type">byte</span>)</span></span> <span class="type">error</span>) *Consumer &#123;</span><br><span class="line">	hostname, _ := os.Hostname()</span><br><span class="line">	<span class="keyword">return</span> &amp;Consumer&#123;</span><br><span class="line">		addr:        addr,</span><br><span class="line">		exchange:    exchange,</span><br><span class="line">		queue:       queue,</span><br><span class="line">		routingKey:  routingKey,</span><br><span class="line">		consumerTag: hostname,</span><br><span class="line">		autoDelete:  <span class="literal">false</span>,</span><br><span class="line">		handler:     handler,</span><br><span class="line">		done:        <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;),</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Consumer)</span></span> Start() <span class="type">error</span> &#123;</span><br><span class="line">	<span class="keyword">if</span> err := c.Run(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">go</span> c.ReConnect()</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Consumer)</span></span> Stop() &#123;</span><br><span class="line">	<span class="built_in">close</span>(c.done)</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> !c.conn.IsClosed() &#123;</span><br><span class="line">		<span class="comment">// 关闭 SubMsg message delivery</span></span><br><span class="line">		<span class="keyword">if</span> err := c.channel.Cancel(c.consumerTag, <span class="literal">true</span>); err != <span class="literal">nil</span> &#123;</span><br><span class="line">			log.Println(<span class="string">&quot;rabbitmq consumer - channel cancel failed: &quot;</span>, err)</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> err := c.conn.Close(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">			log.Println(<span class="string">&quot;rabbitmq consumer - connection close failed: &quot;</span>, err)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Consumer)</span></span> Run() (err <span class="type">error</span>) &#123;</span><br><span class="line">	<span class="keyword">if</span> c.conn, err = amqp.Dial(c.addr); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> c.channel, err = c.conn.Channel(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		c.conn.Close()</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">		<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">			c.channel.Close()</span><br><span class="line">			c.conn.Close()</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;()</span><br><span class="line"></span><br><span class="line">	<span class="comment">// 声明一个主要使用的 exchange</span></span><br><span class="line">	err = c.channel.ExchangeDeclare(</span><br><span class="line">		c.exchange,</span><br><span class="line">		<span class="string">&quot;x-delayed-message&quot;</span>,</span><br><span class="line">		<span class="literal">true</span>,</span><br><span class="line">		c.autoDelete,</span><br><span class="line">		<span class="literal">false</span>,</span><br><span class="line">		<span class="literal">false</span>,</span><br><span class="line">		amqp.Table&#123;</span><br><span class="line">			<span class="string">&quot;x-delayed-type&quot;</span>: <span class="string">&quot;fanout&quot;</span>,</span><br><span class="line">		&#125;)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// 声明一个延时队列, 延时消息就是要发送到这里</span></span><br><span class="line">	q, err := c.channel.QueueDeclare(c.queue, <span class="literal">false</span>, c.autoDelete, <span class="literal">false</span>, <span class="literal">false</span>, <span class="literal">nil</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	err = c.channel.QueueBind(q.Name, <span class="string">&quot;&quot;</span>, c.exchange, <span class="literal">false</span>, <span class="literal">nil</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	c.delivery, err = c.channel.Consume(</span><br><span class="line">		q.Name, c.consumerTag, <span class="literal">false</span>, <span class="literal">false</span>, <span class="literal">false</span>, <span class="literal">false</span>, <span class="literal">nil</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">go</span> c.Handle()</span><br><span class="line"></span><br><span class="line">	c.connNotify = c.conn.NotifyClose(<span class="built_in">make</span>(<span class="keyword">chan</span> *amqp.Error))</span><br><span class="line">	c.channelNotify = c.channel.NotifyClose(<span class="built_in">make</span>(<span class="keyword">chan</span> *amqp.Error))</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Consumer)</span></span> ReConnect() &#123;</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> err := &lt;-c.connNotify:</span><br><span class="line">			<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">				log.Println(<span class="string">&quot;rabbitmq consumer - connection NotifyClose: &quot;</span>, err)</span><br><span class="line">			&#125;</span><br><span class="line">		<span class="keyword">case</span> err := &lt;-c.channelNotify:</span><br><span class="line">			<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">				log.Println(<span class="string">&quot;rabbitmq consumer - channel NotifyClose: &quot;</span>, err)</span><br><span class="line">			&#125;</span><br><span class="line">		<span class="keyword">case</span> &lt;-c.done:</span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="comment">// backstop</span></span><br><span class="line">		<span class="keyword">if</span> !c.conn.IsClosed() &#123;</span><br><span class="line">			<span class="comment">// close message delivery</span></span><br><span class="line">			<span class="keyword">if</span> err := c.channel.Cancel(c.consumerTag, <span class="literal">true</span>); err != <span class="literal">nil</span> &#123;</span><br><span class="line">				log.Println(<span class="string">&quot;rabbitmq consumer - channel cancel failed: &quot;</span>, err)</span><br><span class="line">			&#125;</span><br><span class="line"></span><br><span class="line">			<span class="keyword">if</span> err := c.conn.Close(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">				log.Println(<span class="string">&quot;rabbitmq consumer - channel cancel failed: &quot;</span>, err)</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="comment">// IMPORTANT: 必须清空 Notify，否则死连接不会释放</span></span><br><span class="line">		<span class="keyword">for</span> err := <span class="keyword">range</span> c.channelNotify &#123;</span><br><span class="line">			log.Println(err)</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">for</span> err := <span class="keyword">range</span> c.connNotify &#123;</span><br><span class="line">			log.Println(err)</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">	quit:</span><br><span class="line">		<span class="keyword">for</span> &#123;</span><br><span class="line">			<span class="keyword">select</span> &#123;</span><br><span class="line">			<span class="keyword">case</span> &lt;-c.done:</span><br><span class="line">				<span class="keyword">return</span></span><br><span class="line">			<span class="keyword">default</span>:</span><br><span class="line">				log.Println(<span class="string">&quot;rabbitmq consumer - reconnect&quot;</span>)</span><br><span class="line"></span><br><span class="line">				<span class="keyword">if</span> err := c.Run(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">					log.Println(<span class="string">&quot;rabbitmq consumer - failCheck: &quot;</span>, err)</span><br><span class="line">					<span class="comment">// sleep 15s reconnect</span></span><br><span class="line">					time.Sleep(time.Second * <span class="number">15</span>)</span><br><span class="line">					<span class="keyword">continue</span></span><br><span class="line">				&#125;</span><br><span class="line">				<span class="keyword">break</span> quit</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Consumer)</span></span> Handle() &#123;</span><br><span class="line">	<span class="keyword">for</span> d := <span class="keyword">range</span> c.delivery &#123;</span><br><span class="line">		<span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">(delivery amqp.Delivery)</span></span> &#123;</span><br><span class="line">			<span class="keyword">if</span> err := c.handler(delivery.Body); err != <span class="literal">nil</span> &#123;</span><br><span class="line">				<span class="comment">// 重新入队，否则未确认的消息会持续占用内存，这里的操作取决于你的实现，你可以当出错之后并直接丢弃也是可以的</span></span><br><span class="line">				_ = delivery.Reject(<span class="literal">true</span>)</span><br><span class="line">			&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">				_ = delivery.Ack(<span class="literal">false</span>)</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;(d)</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+        
+            <div id="toc-article">
+                
+  <div class="widget-wrap" id="toc-wrap">
+    <h3 class="widget-title"><i class="fa fa-toc"></i> 文章目录</h3>
+    <div class="widget">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#rabbitmq%E4%BD%BF%E7%94%A8"><span class="toc-text">rabbitmq使用</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#golang-%E7%94%9F%E4%BA%A7%E7%AB%AF%E5%AE%9E%E7%8E%B0"><span class="toc-text">golang 生产端实现</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#golang-%E6%B6%88%E8%B4%B9%E7%AB%AF%E5%AE%9E%E7%8E%B0"><span class="toc-text">golang 消费端实现</span></a></li></ol>
+    </div>
+  </div>
+
+
+            </div>
+        
+        
+          <blockquote id="copyright">
+              <p>原文链接: <a href="https://weixiaodong.github.io/2023/03/21/使用rabbitmq实现延迟队列/">https://weixiaodong.github.io/2023/03/21/使用rabbitmq实现延迟队列/</a></p>
+              <p>版权声明: 转载请注明出处.</p>
+          </blockquote>
+        
+      
+    </div>
+    <footer class="article-footer">
+      
+        <div class="article-tag-wrap">
+          
+    <div class="article-reward">
+        <a id="reward-btn" href="javascript:;">打赏</a>
+        <div id="reward-content">
+            <h6 class="reward-tit">“感谢你的支持，我会继续努力！”</h6>
+            <div>
+                <div class="reward-code">
+                    <img class="type-code" src="/css/images/wechat.jpg">
+                    <img class="er-code" src="/css/images/wechat-pay.png">
+                </div>
+                <div class="reward-code">
+                    <img class="type-code" src="/css/images/alipay.jpg">
+                    <img class="er-code" src="/css/images/alipay-pay.png">
+                </div>
+            </div>
+            <p class="reward-desc">扫码打赏，感谢支持</p>
+        </div>
+    </div>
+
+
+          
+          
+    <div class="social-share">
+      <span>分享到:</span>
+    </div>
+
+
+
+        </div>
+      
+      
+        
+<nav id="article-nav">
+  
+    <a href="/2023/03/20/redis%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">older</strong>
+      <div class="article-nav-title">
+        
+          redis实现分布式锁
+        
+      </div>
+    </a>
+  
+  
+</nav>
+
+      
+      
+        
+
+
+  <section id="comments" class="vcomment"></section>
+
+
+
+
+
+
+
+      
+    </footer>
+  </div>
+</article>
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title"><i class="fa fa-posts"></i> 最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2023/03/21/%E4%BD%BF%E7%94%A8rabbitmq%E5%AE%9E%E7%8E%B0%E5%BB%B6%E8%BF%9F%E9%98%9F%E5%88%97/">使用rabbitmq实现延迟队列</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/20/redis%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/">redis实现分布式锁</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/19/redis%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81/">redis实现分布式限流</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/18/grpc%E6%8B%A6%E6%88%AA%E5%99%A8/">grpc拦截器</a>
+          </li>
+        
+          <li>
+            <a href="/2023/03/18/etcd%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/">etcd分布式锁</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+
+  
+    
+  
+    
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title"><i class="fa fa-archive"></i> 归档</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2023/">2023年</a><span class="archive-list-count">15</span></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+
+  
+    
+
+  
+</aside>
+        
+      </div>
+      <a id="totop" href="#top"></a>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      <p>
+        <a href="/sitemap.xml">网站地图</a>
+        <span> | </span><a href="/atom.xml">订阅本站</a>
+        <span> | </span><a href="/about/">联系博主</a>
+      </p>
+      
+        <p>
+          <i class="fa fa-visitors"></i>
+          <i id="busuanzi_container_site_uv"><i id="busuanzi_value_site_uv"></i></i>
+          ，
+          <i class="fa fa-views"></i>
+          <i id="busuanzi_container_site_pv"><i id="busuanzi_value_site_pv"></i></i>
+        </p>
+      
+      <p>
+        <span>Copyright &copy; 2023 卫小栋.</span>
+        <span>Theme by <a href="https://github.com/chaooo/hexo-theme-BlueLake/" target="_blank">BlueLake.</a></span>
+        <span>Powered by <a href="https://hexo.io/" target="_blank">Hexo.</a></span>
+      </p>
+    </div>
+  </div>
+</footer>
+
+    </div>
+  </div>
+  
+<script src="/js/jquery-3.4.1.min.js"></script>
+
+
+<script src="/js/search.json.js"></script>
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+
+
+  
+<script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+  
+    
+<script src="/localshare/js/social-share.js"></script>
+
+    
+<script src="/localshare/js/qrcode.js"></script>
+
+  
+  
+
+
+
+  
+
+  
+
+  
+    
+<script src="https://cdn.jsdelivr.net/npm/valine@1.3.10/dist/Valine.min.js"></script>
+
+    <script>
+      var GUEST_INFO = ['nick','mail','link'];
+      var guest_info = 'nick,mail,link'.split(',').filter(function(item){
+          return GUEST_INFO.indexOf(item) > -1
+      });
+      var notify = 'false' == true;
+      var verify = 'false' == true;
+      new Valine({
+          el: '.vcomment',
+          notify: notify,
+          verify: verify,
+          appId: "Ao8Phc6VLirvJSnGnlUY8gng-9Nh9j0Va",
+          appKey: "uoKVJAn0RJKvNZTi3f2wPRla",
+          placeholder: "Just go go",
+          pageSize:'10',
+          avatar:'mm',
+          lang:'zh-cn'
+      });
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+  
+
+
+
+
+
+</body>
+</html>
